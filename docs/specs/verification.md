@@ -36,9 +36,9 @@ the two).
 
 **verified identity** (term): The proven outcome of a successful
 verification: the certificate SAN that matched policy, the OIDC issuer,
-the leaf certificate's SHA-256 fingerprint, the Rekor log index and
-integration time, and the digest of the trusted root the proof was
-verified against.
+the leaf certificate's SHA-256 fingerprint, the digest of the trusted
+root verified against, and — when transparency was required — the Rekor
+log index and integration time.
 
 ## Verification
 
@@ -71,13 +71,16 @@ ending in the pinned trusted root's Fulcio authorities; an invalid
 chain, an invalid signature, or a signer certificate mismatch each fail
 verification.
 
-**REQ-verify-embedded-rekor** (behavior): The transparency proof MUST be
-decoded from the signature's embedded unsigned attribute, bound to this
-signature — the reconstructed log-entry body commits to the signed
-message digest, the signature bytes, and the leaf certificate — and its
-inclusion proof and signed entry timestamp verified against the pinned
-root's log keys; a signature with no embedded proof is unverifiable and
-fails.
+**REQ-verify-embedded-rekor** (behavior): When the caller requires
+transparency, the proof MUST be decoded from the signature's embedded
+unsigned attribute, bound to this signature — the reconstructed
+log-entry body commits to the signed message digest, the signature
+bytes, and the leaf certificate — and its inclusion proof and signed
+entry timestamp verified against the pinned root's log keys, with a
+signature carrying no embedded proof unverifiable and failing. Whether
+transparency is required is the caller's policy, stated per call;
+without it, verification is certificate-only and the verified identity
+carries no log entry.
 
 **REQ-verify-identity-match** (behavior): The verified identity MUST
 match policy on both axes: the OIDC issuer from the Fulcio certificate
