@@ -1,0 +1,23 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Build all packages
+    cmds:
+      - go build ./...
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test ./...
+
+  lint:
+    desc: Vet and gofmt check
+    cmds:
+      - go vet ./...
+      - test -z "$(gofmt -l .)"
+
+  tidy:
+    desc: Tidy the module graph
+    cmds:
+      - go mod tidy
