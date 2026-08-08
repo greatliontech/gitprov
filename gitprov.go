@@ -1,0 +1,40 @@
+// Package gitprov verifies the provenance of git objects, fully offline
+// (docs/specs/verification.md): a gitsign (sigstore keyless) CMS
+// signature over the raw commit or annotated-tag bytes, a Fulcio
+// short-lived certificate carrying the signer's OIDC identity matched
+// against caller policy, and — when the caller requires transparency —
+// a Rekor inclusion proof embedded in the signature itself, verified
+// against a caller-pinned trusted root. No service is ever queried.
+//
+// Only signatures made in gitsign's offline Rekor mode
+// (`gitsign.rekorMode=offline`) carry the embedded proof. A signature
+// from gitsign's default online mode is unverifiable with transparency
+// required — its legacy Rekor entry is not an offline-verifiable
+// binding of the CMS signature, a dead end established empirically
+// (gitsign's own source plus real-bytes captures) before this library's
+// extraction — and there is deliberately no network fallback.
+//
+// Mechanism notes:
+//
+//   - Certificate-chain verification uses gitsign's public pkg/git:
+//     SplitCommit/SplitTag for git-core-faithful raw-byte splitting
+//     (never a library object re-encode) and CertVerifier over Fulcio
+//     pools built from the pinned trusted root.
+//   - The offline Rekor inclusion check cannot use gitsign's own
+//     verifier: pkg/rekor.Client.VerifyInclusion is hard-wired to
+//     cosign's TUF/network trusted-root global, and its reconstruction
+//     helpers live under gitsign/internal. rekoroid.go is a faithful,
+//     attributed port of gitsign v0.16.0 internal/rekor/oid; the
+//     proof+SET check is cosign/v3's VerifyTLogEntryOffline with the
+//     pinned root as trusted material.
+//   - CMS structural access uses the upstream
+//     github.com/github/smimesign/ietf-cms/protocol; sigstore-go
+//     supplies only trusted-root material (its verify API is
+//     Bundle-only and cannot consume CMS).
+//
+// Dependency floor: gitsign v0.16.0 — CVE-2026-44310 (empty-cert PKCS7)
+// was fixed in v0.15.0, and v0.16.0 carries the raw-bytes
+// SplitCommit/SplitTag path (CVE-2026-44309) this package's raw-bytes
+// contract requires. Re-audit rekoroid.go against upstream on any
+// gitsign bump.
+package gitprov

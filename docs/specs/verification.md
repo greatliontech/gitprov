@@ -54,12 +54,15 @@ reconstructed from a decoded object structure is rejected territory —
 any normalization would verify bytes the origin never signed.
 
 **REQ-verify-signature-extraction** (behavior): The signature MUST be
-taken from the header matching the caller-stated git object format —
-`gpgsig` (or the tag's in-body trailer) for SHA-1 objects,
-`gpgsig-sha256` (or the in-body trailer) for SHA-256 objects — and an
-object carrying no signature in its format's location fails
-verification: cross-format header mixing would accept a signature the
-object's own repository does not consider its signature.
+taken from the location that signs the form of the bytes in hand, per
+git's hash-function-transition rules: for a commit, the header matching
+the caller-stated object format (`gpgsig` signs the SHA-1 form,
+`gpgsig-sha256` the SHA-256 form); for a tag, the in-body trailer in
+either format — a tag's `gpgsig`/`gpgsig-sha256` headers carry
+signatures over the *alternate*-form bytes and are never selected. An
+object carrying no signature at its form's location fails verification:
+selecting a cross-form signature would verify bytes other than the ones
+in hand.
 
 **REQ-verify-object-formats** (behavior): Both git object formats,
 SHA-1 and SHA-256, MUST verify through the same contract; the object
