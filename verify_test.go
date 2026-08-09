@@ -672,6 +672,7 @@ func TestProductionImportsCarryNoNetworkCapability(t *testing.T) {
 			ThirdParty: []string{
 				"github.com/github/smimesign/ietf-cms/protocol",
 				"github.com/go-openapi/strfmt",
+				"github.com/greatliontech/glob",
 				"github.com/go-openapi/swag/conv",
 				"github.com/sigstore/cosign/v3/pkg/cosign",
 				"github.com/sigstore/fulcio/pkg/certificate",

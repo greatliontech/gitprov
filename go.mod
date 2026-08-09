@@ -7,6 +7,7 @@ require (
 	github.com/go-openapi/strfmt v0.26.1
 	github.com/go-openapi/swag/conv v0.26.0
 	github.com/google/go-cmp v0.7.0
+	github.com/greatliontech/glob v0.1.0
 	github.com/greatliontech/stipulator/stipulate/structural v0.3.0
 	github.com/sigstore/cosign/v3 v3.0.6
 	github.com/sigstore/fulcio v1.8.5

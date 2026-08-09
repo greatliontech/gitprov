@@ -30,9 +30,11 @@ construct that cannot be re-verified offline, so such signatures are
 unverifiable to this library by design, not by omission.
 
 **identity policy** (term): The caller's statement of who may sign: an
-OIDC issuer (exact string or full-match regex, exactly one of the two)
-and a certificate SAN (exact string or full-match regex, exactly one of
-the two).
+OIDC issuer and a certificate SAN, each given as exactly one of an
+exact string, a full-match regular expression, or a full-input glob
+pattern (`/`-separated component semantics: `*` and `?` within a
+component, `**` written as a complete component matching zero or more
+components, character classes and alternatives, backslash quoting).
 
 **verified identity** (term): The proven outcome of a successful
 verification: the certificate SAN that matched policy, the OIDC issuer,
@@ -89,13 +91,13 @@ carries no log entry.
 match policy on both axes: the OIDC issuer from the Fulcio certificate
 extension matches the policy's issuer, and at least one certificate SAN
 — URI, email, DNS, IP, or the Fulcio OtherName — matches the policy's
-subject; regex matching spans the entire value, since a substring match
-on an identity is a policy bypass.
+subject; regex and glob matching span the entire value, since a
+substring match on an identity is a policy bypass.
 
 **REQ-verify-policy-shape** (invariant): An identity policy naming
-neither or both members of an exact/regex pair, or carrying a regex that
-does not compile, MUST be rejected before any verification: an unusable
-policy never silently passes a subject.
+none or more than one of an axis's pattern kinds, or carrying a regex
+or glob that does not compile, MUST be rejected before any
+verification: an unusable policy never silently passes a subject.
 
 **REQ-verify-fail-closed** (invariant): Every failure — unsigned object,
 malformed signature, invalid chain, missing or unverifiable transparency

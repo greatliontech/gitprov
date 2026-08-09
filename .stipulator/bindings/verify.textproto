@@ -138,7 +138,7 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-identity-match"
-  content_hash: "b5117756cf8ffe4d0ecd6eec0f8fef24191ff3f9f564966baea49e90736a3730"
+  content_hash: "b6ea6f7bc652428d53d4a16dfe6936248579bbb0ce665dd979c7149dc661e6ae"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.Identity.match"
   role: BINDING_ROLE_IMPLEMENTS
@@ -147,7 +147,7 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-identity-match"
-  content_hash: "b5117756cf8ffe4d0ecd6eec0f8fef24191ff3f9f564966baea49e90736a3730"
+  content_hash: "b6ea6f7bc652428d53d4a16dfe6936248579bbb0ce665dd979c7149dc661e6ae"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.TestIdentityMatch"
   role: BINDING_ROLE_TESTS
@@ -156,7 +156,7 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-policy-shape"
-  content_hash: "456fbed23ce6d54f18f210aed06c3cfc1aa539361b7fa0ccba05910f9613587f"
+  content_hash: "ee983b867a523ac739087f99ec47153e577f866c1196201c6d5f6be2857f1f47"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.Identity.Validate"
   role: BINDING_ROLE_IMPLEMENTS
@@ -165,7 +165,7 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-policy-shape"
-  content_hash: "456fbed23ce6d54f18f210aed06c3cfc1aa539361b7fa0ccba05910f9613587f"
+  content_hash: "ee983b867a523ac739087f99ec47153e577f866c1196201c6d5f6be2857f1f47"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.TestIdentityValidate"
   role: BINDING_ROLE_TESTS
@@ -219,7 +219,7 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-policy-shape"
-  content_hash: "456fbed23ce6d54f18f210aed06c3cfc1aa539361b7fa0ccba05910f9613587f"
+  content_hash: "ee983b867a523ac739087f99ec47153e577f866c1196201c6d5f6be2857f1f47"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.TestIdentityValidateAcceptsExactlyWellFormedPolicies"
   role: BINDING_ROLE_TESTS

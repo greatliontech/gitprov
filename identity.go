@@ -5,34 +5,48 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/greatliontech/glob"
 	"github.com/sigstore/fulcio/pkg/certificate"
 	"github.com/sigstore/sigstore/pkg/cryptoutils"
 )
 
 // Identity is the caller's statement of who may sign
-// (REQ-verify-identity-match): exactly one of Issuer/IssuerRegex and
-// exactly one of Subject/SubjectRegex must be set.
+// (REQ-verify-identity-match): each axis carries exactly one pattern
+// kind — an exact string, a full-match regular expression, or a
+// full-input glob (`/`-separated component semantics; the
+// greatliontech/glob pattern language).
 type Identity struct {
-	Issuer       string // exact OIDC issuer  (xor IssuerRegex)
-	IssuerRegex  string // OIDC issuer regex  (xor Issuer)
-	Subject      string // exact cert SAN     (xor SubjectRegex)
-	SubjectRegex string // cert SAN regex     (xor Subject)
+	Issuer       string // exact OIDC issuer   (xor the other Issuer kinds)
+	IssuerRegex  string // OIDC issuer regex   (xor)
+	IssuerGlob   string // OIDC issuer glob    (xor)
+	Subject      string // exact cert SAN      (xor the other Subject kinds)
+	SubjectRegex string // cert SAN regex      (xor)
+	SubjectGlob  string // cert SAN glob       (xor)
 }
 
 // Validate enforces the policy shape (REQ-verify-policy-shape). A
-// policy naming neither or both of a pair is ambiguous intent and is
-// rejected up front: an unusable policy must never silently pass a
-// subject.
+// policy naming none or several of an axis's pattern kinds is ambiguous
+// intent and is rejected up front: an unusable policy must never
+// silently pass a subject.
 func (id Identity) Validate() error {
+	if err := validateAxis("Issuer", id.Issuer, id.IssuerRegex, id.IssuerGlob); err != nil {
+		return err
+	}
+	return validateAxis("Subject", id.Subject, id.SubjectRegex, id.SubjectGlob)
+}
+
+func validateAxis(axis, exact, pat, glb string) error {
+	n := 0
+	for _, s := range []string{exact, pat, glb} {
+		if s != "" {
+			n++
+		}
+	}
 	switch {
-	case id.Issuer == "" && id.IssuerRegex == "":
-		return fmt.Errorf("gitprov: identity policy: one of Issuer or IssuerRegex is required")
-	case id.Issuer != "" && id.IssuerRegex != "":
-		return fmt.Errorf("gitprov: identity policy: Issuer and IssuerRegex are mutually exclusive")
-	case id.Subject == "" && id.SubjectRegex == "":
-		return fmt.Errorf("gitprov: identity policy: one of Subject or SubjectRegex is required")
-	case id.Subject != "" && id.SubjectRegex != "":
-		return fmt.Errorf("gitprov: identity policy: Subject and SubjectRegex are mutually exclusive")
+	case n == 0:
+		return fmt.Errorf("gitprov: identity policy: one of %s, %[1]sRegex, or %[1]sGlob is required", axis)
+	case n > 1:
+		return fmt.Errorf("gitprov: identity policy: %s, %[1]sRegex, and %[1]sGlob are mutually exclusive", axis)
 	}
 	// Compile the BARE pattern. This is deliberately not the anchored
 	// form fullMatch uses: bare compilation is precisely what rejects a
@@ -43,35 +57,44 @@ func (id Identity) Validate() error {
 	// `\A(?:P)\z` stays a true full match. (The pattern is caller
 	// policy, never attacker input — the adversary controls the
 	// certificate, not the policy.)
-	if id.IssuerRegex != "" {
-		if _, err := regexp.Compile(id.IssuerRegex); err != nil {
-			return fmt.Errorf("gitprov: identity policy: invalid IssuerRegex: %w", err)
+	if pat != "" {
+		if _, err := regexp.Compile(pat); err != nil {
+			return fmt.Errorf("gitprov: identity policy: invalid %sRegex: %w", axis, err)
 		}
 	}
-	if id.SubjectRegex != "" {
-		if _, err := regexp.Compile(id.SubjectRegex); err != nil {
-			return fmt.Errorf("gitprov: identity policy: invalid SubjectRegex: %w", err)
+	// Globs match full-input by construction; compilation is the whole
+	// validity question.
+	if glb != "" {
+		if _, err := glob.Compile(glb); err != nil {
+			return fmt.Errorf("gitprov: identity policy: invalid %sGlob: %w", axis, err)
 		}
 	}
 	return nil
 }
 
-// fullMatch reports whether value equals exact (when set) or is fully
-// matched by pat (when set). A regex matches only if it spans the
-// entire value: a substring match on an identity is a policy bypass
-// (REQ-verify-identity-match). RE2 (no backtracking) plus the absolute
-// \A…\z anchors make this robust even against a SAN containing
-// newlines or regex metacharacters; Validate's bare compile guarantees
-// pat cannot escape the wrapper group.
-func fullMatch(exact, pat, value string) bool {
+// fullMatch reports whether value matches the axis's one set pattern
+// kind. Every kind spans the entire value: a substring match on an
+// identity is a policy bypass (REQ-verify-identity-match). For regex,
+// RE2 (no backtracking) plus the absolute \A…\z anchors make this
+// robust even against a SAN containing newlines or metacharacters, and
+// Validate's bare compile guarantees pat cannot escape the wrapper
+// group; globs are full-input by construction.
+func fullMatch(exact, pat, glb, value string) bool {
 	if exact != "" {
 		return value == exact
 	}
-	re, err := regexp.Compile(`\A(?:` + pat + `)\z`)
-	if err != nil {
-		return false // unreachable: Validate rejects any pat invalid here
+	if pat != "" {
+		re, err := regexp.Compile(`\A(?:` + pat + `)\z`)
+		if err != nil {
+			return false // unreachable: Validate rejects any pat invalid here
+		}
+		return re.MatchString(value)
 	}
-	return re.MatchString(value)
+	p, err := glob.Compile(glb)
+	if err != nil {
+		return false // unreachable: Validate rejects any glb invalid here
+	}
+	return p.Match(value)
 }
 
 // certIdentity is the (issuer, subjects) extracted from a verified
@@ -100,11 +123,11 @@ func (id Identity) match(leaf *x509.Certificate) (matchedSubject, issuer string,
 	if iss == "" {
 		return "", "", fmt.Errorf("gitprov: certificate has no OIDC issuer extension")
 	}
-	if !fullMatch(id.Issuer, id.IssuerRegex, iss) {
+	if !fullMatch(id.Issuer, id.IssuerRegex, id.IssuerGlob, iss) {
 		return "", "", fmt.Errorf("gitprov: certificate issuer %q does not match policy", iss)
 	}
 	for _, s := range subjects {
-		if s != "" && fullMatch(id.Subject, id.SubjectRegex, s) {
+		if s != "" && fullMatch(id.Subject, id.SubjectRegex, id.SubjectGlob, s) {
 			return s, iss, nil
 		}
 	}

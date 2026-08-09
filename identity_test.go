@@ -27,12 +27,18 @@ func TestIdentityValidate(t *testing.T) {
 		{"exact/exact ok", Identity{Issuer: "https://accounts.google.com", Subject: "a@b.com"}, ""},
 		{"regex/regex ok", Identity{IssuerRegex: `https://.*`, SubjectRegex: `.*@b\.com`}, ""},
 		{"exact issuer + regex subject ok", Identity{Issuer: "https://x", SubjectRegex: `.+`}, ""},
-		{"no issuer at all", Identity{Subject: "a@b.com"}, "one of Issuer or IssuerRegex is required"},
-		{"both issuer forms", Identity{Issuer: "x", IssuerRegex: "y", Subject: "a@b.com"}, "Issuer and IssuerRegex are mutually exclusive"},
-		{"no subject at all", Identity{Issuer: "x"}, "one of Subject or SubjectRegex is required"},
-		{"both subject forms", Identity{Issuer: "x", Subject: "a", SubjectRegex: "b"}, "Subject and SubjectRegex are mutually exclusive"},
+		{"glob/glob ok", Identity{IssuerGlob: "https://**", SubjectGlob: "*@b.com"}, ""},
+		{"exact issuer + glob subject ok", Identity{Issuer: "https://x", SubjectGlob: "https://github.com/acme/**"}, ""},
+		{"no issuer at all", Identity{Subject: "a@b.com"}, "one of Issuer, IssuerRegex, or IssuerGlob is required"},
+		{"both issuer forms", Identity{Issuer: "x", IssuerRegex: "y", Subject: "a@b.com"}, "Issuer, IssuerRegex, and IssuerGlob are mutually exclusive"},
+		{"regex and glob issuer", Identity{IssuerRegex: "x", IssuerGlob: "y", Subject: "a@b.com"}, "mutually exclusive"},
+		{"all three subject forms", Identity{Issuer: "x", Subject: "a", SubjectRegex: "b", SubjectGlob: "c"}, "mutually exclusive"},
+		{"no subject at all", Identity{Issuer: "x"}, "one of Subject, SubjectRegex, or SubjectGlob is required"},
+		{"both subject forms", Identity{Issuer: "x", Subject: "a", SubjectRegex: "b"}, "Subject, SubjectRegex, and SubjectGlob are mutually exclusive"},
 		{"invalid issuerRegex", Identity{IssuerRegex: "(", Subject: "a@b.com"}, "invalid IssuerRegex"},
 		{"invalid subjectRegex", Identity{Issuer: "x", SubjectRegex: "["}, "invalid SubjectRegex"},
+		{"invalid issuerGlob", Identity{IssuerGlob: "[a", Subject: "a@b.com"}, "invalid IssuerGlob"},
+		{"invalid subjectGlob", Identity{Issuer: "x", SubjectGlob: "{a"}, "invalid SubjectGlob"},
 		// Security regression: a pattern crafted to escape fullMatch's
 		// \A(?:…)\z wrapper (close the group early, then `(?:` to
 		// rebalance the trailing `)`) has unbalanced parens *bare* and
@@ -92,6 +98,43 @@ func TestIdentityMatch(t *testing.T) {
 		}
 		if ms != subject || iss != issuer {
 			t.Fatalf("match() = (%q,%q), want (%q,%q)", ms, iss, subject, issuer)
+		}
+	})
+
+	t.Run("glob subject matches component-aware", func(t *testing.T) {
+		id := Identity{Issuer: issuer, SubjectGlob: "*@gmail.com"}
+		ms, iss, err := id.match(leaf)
+		if err != nil {
+			t.Fatalf("match() = %v, want nil", err)
+		}
+		if ms != subject || iss != issuer {
+			t.Fatalf("match() = (%q,%q), want (%q,%q)", ms, iss, subject, issuer)
+		}
+	})
+
+	t.Run("glob issuer matches across components with **", func(t *testing.T) {
+		id := Identity{IssuerGlob: "https://**", Subject: subject}
+		if _, _, err := id.match(leaf); err != nil {
+			t.Fatalf("match() = %v, want nil", err)
+		}
+	})
+
+	t.Run("glob subject spans the value (substring is a bypass)", func(t *testing.T) {
+		// "nikolas.sepos" without wildcards must not match the full SAN.
+		id := Identity{Issuer: issuer, SubjectGlob: "nikolas.sepos"}
+		if _, _, err := id.match(leaf); err == nil {
+			t.Fatal("match() = nil, want error: a glob is a full-input match, never a substring")
+		}
+	})
+
+	t.Run("glob * does not cross a / component boundary", func(t *testing.T) {
+		// "https:/*" is two /-separated components; the issuer
+		// "https://accounts.google.com" is three. A single * is
+		// component-scoped and must not absorb the extra "/" — only **
+		// crosses components.
+		id := Identity{IssuerGlob: "https:/*", Subject: subject}
+		if _, _, err := id.match(leaf); err == nil {
+			t.Fatal("match() = nil, want error: * must not cross a component boundary")
 		}
 	})
 
@@ -185,47 +228,59 @@ func TestIdentityMatch(t *testing.T) {
 }
 
 // TestFullMatchInvalidPatternFailsClosed pins fullMatch's last-resort
-// arm directly: called with a pattern Validate would reject, it answers
-// false — never a panic, never a match.
+// arms directly: called with a regex or glob Validate would reject, it
+// answers false — never a panic, never a match.
 func TestFullMatchInvalidPatternFailsClosed(t *testing.T) {
-	if fullMatch("", "(", "anything") {
-		t.Fatal("fullMatch(invalid pattern) = true, want false")
+	if fullMatch("", "(", "", "anything") {
+		t.Fatal("fullMatch(invalid regex) = true, want false")
+	}
+	if fullMatch("", "", "[a", "anything") {
+		t.Fatal("fullMatch(invalid glob) = true, want false")
 	}
 }
 
 // TestIdentityValidateAcceptsExactlyWellFormedPolicies proves
 // REQ-verify-policy-shape as a for-all property: over every combination
-// of empty/exact/valid-regex/invalid-regex on both axes, Validate
-// accepts exactly the policies naming one member of each pair with any
-// regex compiling — and every accepted regex also compiles in
-// fullMatch's anchored `\A(?:…)\z` form, so no accepted pattern can
-// escape the wrapper and de-anchor the match.
+// of empty/exact/regex/glob (valid and invalid) on both axes, Validate
+// accepts exactly the policies naming one valid pattern kind per axis —
+// and every accepted regex also compiles in fullMatch's anchored
+// `\A(?:…)\z` form, so no accepted pattern can escape the wrapper and
+// de-anchor the match.
 func TestIdentityValidateAcceptsExactlyWellFormedPolicies(t *testing.T) {
-	// Shapes for one exact/regex pair; ok marks the well-formed ones.
-	type pairShape struct {
-		exact, regex string
-		ok           bool
+	// Shapes for one axis's pattern kinds; ok marks the well-formed ones.
+	type axisShape struct {
+		exact, regex, glob string
+		ok                 bool
 	}
 	validRe := rapid.SampledFrom([]string{`.+`, `https://.*`, `[a-z]+@example\.com`, `(a|b)c*`, `\d{3}`, `a{2,4}`})
 	invalidRe := rapid.SampledFrom([]string{`(`, `[`, `*`, `(?P<`, `a)\z|(?:`, `a(`, `+x`})
+	validGlob := rapid.SampledFrom([]string{`*`, `**`, `a/*`, `{a,b}`, `?x`, `*@example.com`, `https://github.com/acme/**`})
+	invalidGlob := rapid.SampledFrom([]string{`[a`, `{a`, `[!`, `{a,{b`})
 	exact := rapid.SampledFrom([]string{"a@b.com", "https://accounts.google.com", "x"})
-	pair := func(rt *rapid.T, label string) pairShape {
-		switch rapid.IntRange(0, 4).Draw(rt, label+"Shape") {
-		case 0: // neither: malformed
-			return pairShape{"", "", false}
+	axis := func(rt *rapid.T, label string) axisShape {
+		switch rapid.IntRange(0, 6).Draw(rt, label+"Shape") {
+		case 0: // nothing: malformed
+			return axisShape{ok: false}
 		case 1: // exact only: well-formed
-			return pairShape{exact.Draw(rt, label+"Exact"), "", true}
+			return axisShape{exact: exact.Draw(rt, label+"Exact"), ok: true}
 		case 2: // valid regex only: well-formed
-			return pairShape{"", validRe.Draw(rt, label+"ValidRe"), true}
+			return axisShape{regex: validRe.Draw(rt, label+"ValidRe"), ok: true}
 		case 3: // invalid regex only: malformed
-			return pairShape{"", invalidRe.Draw(rt, label+"InvalidRe"), false}
-		default: // both: malformed even when each member is individually fine
-			return pairShape{exact.Draw(rt, label+"BothExact"), validRe.Draw(rt, label+"BothRe"), false}
+			return axisShape{regex: invalidRe.Draw(rt, label+"InvalidRe"), ok: false}
+		case 4: // valid glob only: well-formed
+			return axisShape{glob: validGlob.Draw(rt, label+"ValidGlob"), ok: true}
+		case 5: // invalid glob only: malformed
+			return axisShape{glob: invalidGlob.Draw(rt, label+"InvalidGlob"), ok: false}
+		default: // two kinds at once: malformed even when each is fine
+			return axisShape{exact: exact.Draw(rt, label+"BothExact"), glob: validGlob.Draw(rt, label+"BothGlob"), ok: false}
 		}
 	}
 	rapid.Check(t, func(rt *rapid.T) {
-		iss, sub := pair(rt, "issuer"), pair(rt, "subject")
-		id := Identity{Issuer: iss.exact, IssuerRegex: iss.regex, Subject: sub.exact, SubjectRegex: sub.regex}
+		iss, sub := axis(rt, "issuer"), axis(rt, "subject")
+		id := Identity{
+			Issuer: iss.exact, IssuerRegex: iss.regex, IssuerGlob: iss.glob,
+			Subject: sub.exact, SubjectRegex: sub.regex, SubjectGlob: sub.glob,
+		}
 		err := id.Validate()
 		if want := iss.ok && sub.ok; (err == nil) != want {
 			t.Fatalf("Validate(%+v) = %v, want ok=%v", id, err, want)
