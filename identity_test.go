@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"errors"
 	"math/big"
 	"regexp"
 	"strings"
@@ -149,6 +150,8 @@ func TestIdentityMatch(t *testing.T) {
 		id := Identity{Issuer: "https://evil.example.com", Subject: subject}
 		if _, _, err := id.match(leaf); err == nil || !strings.Contains(err.Error(), "issuer") {
 			t.Fatalf("match() = %v, want issuer-mismatch error", err)
+		} else if !errors.Is(err, ErrIdentityMismatch) {
+			t.Fatalf("issuer mismatch = %v, want errors.Is(ErrIdentityMismatch): callers classify non-acceptance on it", err)
 		}
 	})
 
@@ -156,6 +159,8 @@ func TestIdentityMatch(t *testing.T) {
 		id := Identity{Issuer: issuer, Subject: "someone-else@example.com"}
 		if _, _, err := id.match(leaf); err == nil || !strings.Contains(err.Error(), "SAN") {
 			t.Fatalf("match() = %v, want no-SAN-match error", err)
+		} else if !errors.Is(err, ErrIdentityMismatch) {
+			t.Fatalf("SAN mismatch = %v, want errors.Is(ErrIdentityMismatch): callers classify non-acceptance on it", err)
 		}
 	})
 
@@ -164,6 +169,8 @@ func TestIdentityMatch(t *testing.T) {
 		id := Identity{Issuer: issuer, Subject: subject}
 		if _, _, err := id.match(bare); err == nil || !strings.Contains(err.Error(), "no OIDC issuer extension") {
 			t.Fatalf("match() = %v, want no-issuer-extension error", err)
+		} else if errors.Is(err, ErrIdentityMismatch) {
+			t.Fatalf("missing issuer extension classified as identity mismatch: %v — a malformed certificate is not a mere non-acceptance", err)
 		}
 	})
 

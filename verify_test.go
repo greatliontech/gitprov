@@ -689,7 +689,7 @@ func TestProductionImportsCarryNoNetworkCapability(t *testing.T) {
 			StandardLibrary: []string{
 				"bytes", "context", "crypto/sha256", "crypto/x509",
 				"encoding/asn1", "encoding/base64", "encoding/hex", "encoding/pem",
-				"fmt", "os", "regexp",
+				"errors", "fmt", "os", "regexp",
 			},
 		},
 	})

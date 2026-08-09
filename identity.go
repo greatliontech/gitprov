@@ -2,6 +2,7 @@ package gitprov
 
 import (
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"regexp"
 
@@ -23,6 +24,14 @@ type Identity struct {
 	SubjectRegex string // cert SAN regex      (xor)
 	SubjectGlob  string // cert SAN glob       (xor)
 }
+
+// ErrIdentityMismatch marks a certificate whose extracted identity does
+// not satisfy the policy on some axis (REQ-verify-identity-match) — a
+// cryptographically valid signature by a signer the policy does not
+// accept, as opposed to invalid or unverifiable evidence. Callers whose
+// own policy tolerates unsigned subjects classify on it: an unaccepted
+// signer is a non-acceptance, not proof of tampering.
+var ErrIdentityMismatch = errors.New("gitprov: certificate identity does not match policy")
 
 // Validate enforces the policy shape (REQ-verify-policy-shape). A
 // policy naming none or several of an axis's pattern kinds is ambiguous
@@ -124,12 +133,12 @@ func (id Identity) match(leaf *x509.Certificate) (matchedSubject, issuer string,
 		return "", "", fmt.Errorf("gitprov: certificate has no OIDC issuer extension")
 	}
 	if !fullMatch(id.Issuer, id.IssuerRegex, id.IssuerGlob, iss) {
-		return "", "", fmt.Errorf("gitprov: certificate issuer %q does not match policy", iss)
+		return "", "", fmt.Errorf("%w: certificate issuer %q", ErrIdentityMismatch, iss)
 	}
 	for _, s := range subjects {
 		if s != "" && fullMatch(id.Subject, id.SubjectRegex, id.SubjectGlob, s) {
 			return s, iss, nil
 		}
 	}
-	return "", "", fmt.Errorf("gitprov: no certificate SAN %v matches policy", subjects)
+	return "", "", fmt.Errorf("%w: no certificate SAN %v matches", ErrIdentityMismatch, subjects)
 }
