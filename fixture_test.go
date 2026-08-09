@@ -1,8 +1,14 @@
 package gitprov
 
 import (
+	"bytes"
+	"crypto/x509"
+	"encoding/pem"
 	"os"
 	"testing"
+
+	"github.com/github/smimesign/ietf-cms/protocol"
+	gitsign "github.com/sigstore/gitsign/pkg/git"
 )
 
 // The real-bytes fixtures under testdata: a genuine gitsign
@@ -29,4 +35,37 @@ func loadEmbeddedFixture(t *testing.T) (raw []byte, tr *TrustedRoot) {
 		t.Fatalf("load fixture trusted root: %v", err)
 	}
 	return raw, tr
+}
+
+// fixtureSigLeaf extracts the PEM CMS signature and the signer leaf
+// certificate from the embedded fixture commit, for tests that drive
+// the unexported verification internals directly.
+func fixtureSigLeaf(t *testing.T) (sig []byte, leaf *x509.Certificate) {
+	t.Helper()
+	raw, _ := loadEmbeddedFixture(t)
+	cs, err := gitsign.SplitCommit(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("split fixture commit: %v", err)
+	}
+	der := cs.Gpgsig
+	if blk, _ := pem.Decode(cs.Gpgsig); blk != nil {
+		der = blk.Bytes
+	}
+	ci, err := protocol.ParseContentInfo(der)
+	if err != nil {
+		t.Fatalf("parse fixture CMS: %v", err)
+	}
+	sd, err := ci.SignedDataContent()
+	if err != nil {
+		t.Fatalf("fixture signed-data: %v", err)
+	}
+	certs, err := sd.X509Certificates()
+	if err != nil || len(certs) == 0 {
+		t.Fatalf("fixture certs: %v (n=%d)", err, len(certs))
+	}
+	leaf, err = sd.SignerInfos[0].FindCertificate(certs)
+	if err != nil {
+		t.Fatalf("fixture signer cert: %v", err)
+	}
+	return cs.Gpgsig, leaf
 }

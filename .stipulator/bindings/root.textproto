@@ -1,0 +1,20 @@
+# proto-file: proto/stipulator/v1/records.proto
+# proto-message: stipulator.v1.BindingSet
+
+bindings {
+  requirement_id: "REQ-root-pinned-bytes"
+  content_hash: "6ba7cbe0dd463b1294a5563061991dcd4987969686db5a1a388c30b2012836fc"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.ParseTrustedRoot"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "51b17b8307a053ccdb8ea856f43932b63c854c2cf55858b2b6cf724418eda5ea"
+}
+
+bindings {
+  requirement_id: "REQ-root-pinned-bytes"
+  content_hash: "6ba7cbe0dd463b1294a5563061991dcd4987969686db5a1a388c30b2012836fc"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestLoadTrustedRoot"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "77c1ede6940345e17914670d3ff473d6bd8582af5d6737460f22b2d405e6820b"
+}

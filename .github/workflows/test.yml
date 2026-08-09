@@ -1,0 +1,26 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+      # The suite pins rapid's seed for oracle determinism, which fixes
+      # the property tests to one trajectory. This leg restores the
+      # accumulating-coverage role: a per-run seed (the run id, so any
+      # failure is replayable) explores fresh examples every run.
+      - name: property tests, varying seed
+        run: go test -count=1 -run 'TestSplitSignatureRoundTripsRawBytes|TestIdentityValidateAcceptsExactlyWellFormedPolicies|TestVerifyFailsClosedUnderCorruption' ./... -args -rapid.seed=${{ github.run_id }} -rapid.checks=500

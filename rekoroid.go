@@ -37,21 +37,6 @@ import (
 // TransparencyLogEntry proto (https://github.com/sigstore/rekor/pull/1390).
 var oidRekorTransparencyLogEntry = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 3, 1}
 
-// toLogEntry reconstructs a Rekor HashedRekord from Git commit signature
-// PKCS7 components. Faithful port of gitsign internal/rekor/oid.ToLogEntry.
-// It is the **embedded** path: decode the entry carried in the signature's
-// CMS unsigned attributes, then bind its body to (message, sig, cert).
-func toLogEntry(ctx context.Context, message []byte, sig []byte, cert *x509.Certificate, attrs protocol.Attributes) (*models.LogEntryAnon, error) {
-	out, err := entryFromAttrs(attrs)
-	if err != nil {
-		return nil, err
-	}
-	if err := bindHashedRekordBody(ctx, out, message, sig, cert); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // entryFromAttrs decodes the serialized Rekor TransparencyLogEntry proto from
 // the CMS unsigned attributes into a LogEntryAnon. It does NOT bind the body
 // to any commit — the inclusion proof / SET it carries are attacker-supplied

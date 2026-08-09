@@ -77,18 +77,15 @@ func fullMatch(exact, pat, value string) bool {
 // certIdentity is the (issuer, subjects) extracted from a verified
 // Fulcio leaf: the OIDC issuer from the Fulcio extension
 // (OID 1.3.6.1.4.1.57264.1.8, with the v1 .1.1 fallback handled by
-// fulcio/pkg/certificate.ParseExtensions) and every SAN
-// (URI/email/DNS/IP plus the Fulcio OtherName).
+// fulcio/pkg/certificate.ParseExtensions) and every SAN —
+// GetSubjectAlternateNames covers all five kinds: URI, email, DNS, IP,
+// and the Fulcio OtherName.
 func certIdentity(leaf *x509.Certificate) (issuer string, subjects []string, err error) {
 	ext, err := certificate.ParseExtensions(leaf.Extensions)
 	if err != nil {
 		return "", nil, fmt.Errorf("gitprov: parse fulcio extensions: %w", err)
 	}
-	subjects = cryptoutils.GetSubjectAlternateNames(leaf) // URI/email/DNS/IP
-	if on, err := cryptoutils.UnmarshalOtherNameSAN(leaf.Extensions); err == nil && on != "" {
-		subjects = append(subjects, on)
-	}
-	return ext.Issuer, subjects, nil
+	return ext.Issuer, cryptoutils.GetSubjectAlternateNames(leaf), nil
 }
 
 // match verifies a leaf certificate satisfies the policy. Fail-closed:

@@ -6,12 +6,16 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"math/big"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sigstore/sigstore-go/pkg/testing/ca"
+	"github.com/sigstore/sigstore/pkg/cryptoutils"
+	"pgregory.net/rapid"
 )
 
 func TestIdentityValidate(t *testing.T) {
@@ -119,26 +123,139 @@ func TestIdentityMatch(t *testing.T) {
 			t.Fatalf("match() = %v, want no-issuer-extension error", err)
 		}
 	})
+
+	t.Run("fail-closed: malformed Fulcio issuer extension", func(t *testing.T) {
+		// A cert carrying the Fulcio issuer OID with undecodable DER must
+		// surface the extension-parse failure itself — not fall through to
+		// a downstream empty-issuer or no-SAN diagnosis.
+		bad := testCert(t, &x509.Certificate{
+			SerialNumber:   big.NewInt(2),
+			EmailAddresses: []string{subject},
+			NotBefore:      time.Now().Add(-time.Minute),
+			NotAfter:       time.Now().Add(time.Hour),
+			ExtraExtensions: []pkix.Extension{
+				{Id: asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 8}, Value: []byte{0xff}},
+			},
+		})
+		id := Identity{Issuer: issuer, Subject: subject}
+		if _, _, err := id.match(bad); err == nil || !strings.Contains(err.Error(), "parse fulcio extensions") {
+			t.Fatalf("match() = %v, want extension-parse error", err)
+		}
+	})
+
+	t.Run("DNS SAN is a subject candidate", func(t *testing.T) {
+		// SAN value chosen to also pin the exact non-empty-SAN filter.
+		cert := testCert(t, &x509.Certificate{
+			SerialNumber:    big.NewInt(3),
+			DNSNames:        []string{"mutant"},
+			NotBefore:       time.Now().Add(-time.Minute),
+			NotAfter:        time.Now().Add(time.Hour),
+			ExtraExtensions: []pkix.Extension{fulcioIssuerExt(t, issuer)},
+		})
+		id := Identity{Issuer: issuer, Subject: "mutant"}
+		ms, iss, err := id.match(cert)
+		if err != nil {
+			t.Fatalf("match() = %v, want nil", err)
+		}
+		if ms != "mutant" || iss != issuer {
+			t.Fatalf("match() = (%q,%q), want (mutant,%q)", ms, iss, issuer)
+		}
+	})
+
+	t.Run("Fulcio OtherName SAN is a subject candidate", func(t *testing.T) {
+		on, err := cryptoutils.MarshalOtherNameSAN("mutant", true)
+		if err != nil {
+			t.Fatalf("MarshalOtherNameSAN: %v", err)
+		}
+		cert := testCert(t, &x509.Certificate{
+			SerialNumber:    big.NewInt(4),
+			NotBefore:       time.Now().Add(-time.Minute),
+			NotAfter:        time.Now().Add(time.Hour),
+			ExtraExtensions: []pkix.Extension{fulcioIssuerExt(t, issuer), *on},
+		})
+		id := Identity{Issuer: issuer, Subject: "mutant"}
+		ms, iss, err := id.match(cert)
+		if err != nil {
+			t.Fatalf("match() = %v, want nil", err)
+		}
+		if ms != "mutant" || iss != issuer {
+			t.Fatalf("match() = (%q,%q), want (mutant,%q)", ms, iss, issuer)
+		}
+	})
 }
 
-// selfSignedNoIssuer mints a self-signed leaf with an email SAN but no
-// Fulcio OIDC-issuer extension, exercising the fail-closed empty-issuer
-// rejection.
-func selfSignedNoIssuer(t *testing.T, email string) *x509.Certificate {
+// TestFullMatchInvalidPatternFailsClosed pins fullMatch's last-resort
+// arm directly: called with a pattern Validate would reject, it answers
+// false — never a panic, never a match.
+func TestFullMatchInvalidPatternFailsClosed(t *testing.T) {
+	if fullMatch("", "(", "anything") {
+		t.Fatal("fullMatch(invalid pattern) = true, want false")
+	}
+}
+
+// TestIdentityValidateAcceptsExactlyWellFormedPolicies proves
+// REQ-verify-policy-shape as a for-all property: over every combination
+// of empty/exact/valid-regex/invalid-regex on both axes, Validate
+// accepts exactly the policies naming one member of each pair with any
+// regex compiling — and every accepted regex also compiles in
+// fullMatch's anchored `\A(?:…)\z` form, so no accepted pattern can
+// escape the wrapper and de-anchor the match.
+func TestIdentityValidateAcceptsExactlyWellFormedPolicies(t *testing.T) {
+	// Shapes for one exact/regex pair; ok marks the well-formed ones.
+	type pairShape struct {
+		exact, regex string
+		ok           bool
+	}
+	validRe := rapid.SampledFrom([]string{`.+`, `https://.*`, `[a-z]+@example\.com`, `(a|b)c*`, `\d{3}`, `a{2,4}`})
+	invalidRe := rapid.SampledFrom([]string{`(`, `[`, `*`, `(?P<`, `a)\z|(?:`, `a(`, `+x`})
+	exact := rapid.SampledFrom([]string{"a@b.com", "https://accounts.google.com", "x"})
+	pair := func(rt *rapid.T, label string) pairShape {
+		switch rapid.IntRange(0, 4).Draw(rt, label+"Shape") {
+		case 0: // neither: malformed
+			return pairShape{"", "", false}
+		case 1: // exact only: well-formed
+			return pairShape{exact.Draw(rt, label+"Exact"), "", true}
+		case 2: // valid regex only: well-formed
+			return pairShape{"", validRe.Draw(rt, label+"ValidRe"), true}
+		case 3: // invalid regex only: malformed
+			return pairShape{"", invalidRe.Draw(rt, label+"InvalidRe"), false}
+		default: // both: malformed even when each member is individually fine
+			return pairShape{exact.Draw(rt, label+"BothExact"), validRe.Draw(rt, label+"BothRe"), false}
+		}
+	}
+	rapid.Check(t, func(rt *rapid.T) {
+		iss, sub := pair(rt, "issuer"), pair(rt, "subject")
+		id := Identity{Issuer: iss.exact, IssuerRegex: iss.regex, Subject: sub.exact, SubjectRegex: sub.regex}
+		err := id.Validate()
+		if want := iss.ok && sub.ok; (err == nil) != want {
+			t.Fatalf("Validate(%+v) = %v, want ok=%v", id, err, want)
+		}
+		if err != nil {
+			return
+		}
+		// Wrapper-escape closure: everything Validate accepts must stay a
+		// true full match under the anchored compile.
+		for _, pat := range []string{id.IssuerRegex, id.SubjectRegex} {
+			if pat == "" {
+				continue
+			}
+			if _, aerr := regexp.Compile(`\A(?:` + pat + `)\z`); aerr != nil {
+				t.Fatalf("accepted pattern %q does not compile anchored: %v", pat, aerr)
+			}
+		}
+	})
+}
+
+// testCert self-signs the template and returns the parsed certificate.
+func testCert(t *testing.T, tmpl *x509.Certificate) *x509.Certificate {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmpl := &x509.Certificate{
-		SerialNumber:   big.NewInt(1),
-		EmailAddresses: []string{email},
-		NotBefore:      time.Now().Add(-time.Minute),
-		NotAfter:       time.Now().Add(time.Hour),
-		KeyUsage:       x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:    []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning},
-		Subject:        pkix.Name{CommonName: "no-issuer-test"},
-	}
+	tmpl.KeyUsage = x509.KeyUsageDigitalSignature
+	tmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning}
+	tmpl.Subject = pkix.Name{CommonName: "gitprov-test"}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {
 		t.Fatal(err)
@@ -148,4 +265,28 @@ func selfSignedNoIssuer(t *testing.T, email string) *x509.Certificate {
 		t.Fatal(err)
 	}
 	return c
+}
+
+// fulcioIssuerExt encodes the Fulcio v2 OIDC-issuer extension exactly as
+// fulcio does: a DER UTF8String under OID 1.3.6.1.4.1.57264.1.8.
+func fulcioIssuerExt(t *testing.T, issuer string) pkix.Extension {
+	t.Helper()
+	val, err := asn1.MarshalWithParams(issuer, "utf8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pkix.Extension{Id: asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 1, 8}, Value: val}
+}
+
+// selfSignedNoIssuer mints a self-signed leaf with an email SAN but no
+// Fulcio OIDC-issuer extension, exercising the fail-closed empty-issuer
+// rejection.
+func selfSignedNoIssuer(t *testing.T, email string) *x509.Certificate {
+	t.Helper()
+	return testCert(t, &x509.Certificate{
+		SerialNumber:   big.NewInt(1),
+		EmailAddresses: []string{email},
+		NotBefore:      time.Now().Add(-time.Minute),
+		NotAfter:       time.Now().Add(time.Hour),
+	})
 }

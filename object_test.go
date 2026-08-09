@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	gitsign "github.com/sigstore/gitsign/pkg/git"
+	"pgregory.net/rapid"
 )
 
 func minimalCommitPayload() []byte {
@@ -114,6 +115,20 @@ func TestSplitSignature(t *testing.T) {
 		{"tag with only a gpgsig-sha256 header is unsigned",
 			Object{Tag, SHA1, joinTag(t, &gitsign.TagSig{Payload: tag, GpgsigSha256: fake256})}, "tag is not signed", nil, ""},
 		{"tag unsigned", Object{Tag, SHA1, tag}, "tag is not signed", nil, ""},
+		// Split CAN fail on malformed objects — a duplicate signature
+		// header and an over-long header line (bufio token limit) are
+		// both reachable caller inputs and must surface the split error,
+		// not a downstream misdiagnosis.
+		{"malformed commit: duplicate gpgsig header",
+			Object{Commit, SHA1, []byte("tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\n" +
+				"gpgsig line\ngpgsig line\n" +
+				"author Test User <t@example.com> 1700000000 +0000\n" +
+				"committer Test User <t@example.com> 1700000000 +0000\n" +
+				"\nx\n")}, "split commit", nil, ""},
+		{"malformed tag: header line beyond the scanner token limit",
+			Object{Tag, SHA1, []byte("object 4b825dc642cb6eb9a060e54bf8d69288fbee4904\n" +
+				"type commit\ntag v1\n" + strings.Repeat("a", 70*1024) + "\n\nx\n")},
+			"split tag", nil, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -145,4 +160,83 @@ func firstLine(b []byte) []byte {
 		return b[:i]
 	}
 	return b
+}
+
+// TestSplitSignatureRoundTripsRawBytes proves REQ-verify-raw-bytes as a
+// for-all property: for arbitrary well-formed commit/tag payloads —
+// including message lines that mimic signature headers — and arbitrary
+// signature bytes, splitting the joined object returns the payload and
+// signature byte-for-byte. Any normalization anywhere in the split path
+// (re-encoded headers, trimmed whitespace, reordered fields) breaks the
+// exact equality and would verify bytes the origin never signed.
+func TestSplitSignatureRoundTripsRawBytes(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		format := rapid.SampledFrom([]ObjectFormat{SHA1, SHA256}).Draw(rt, "format")
+		sigDER := rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(rt, "sigDER")
+		sig := pem.EncodeToMemory(&pem.Block{Type: "SIGNED MESSAGE", Bytes: sigDER})
+
+		hex40 := rapid.StringMatching(`[0-9a-f]{40}`)
+		person := rapid.StringMatching(`[A-Za-z][A-Za-z ]{0,12}[A-Za-z] <[a-z]{1,8}@[a-z]{1,8}\.com> 17[0-9]{8} \+0000`)
+
+		var payload, raw []byte
+		var obj Object
+		if rapid.Bool().Draw(rt, "isCommit") {
+			var b bytes.Buffer
+			b.WriteString("tree " + hex40.Draw(rt, "tree") + "\n")
+			for i, n := 0, rapid.IntRange(0, 2).Draw(rt, "parents"); i < n; i++ {
+				b.WriteString("parent " + hex40.Draw(rt, "parent") + "\n")
+			}
+			b.WriteString("author " + person.Draw(rt, "author") + "\n")
+			b.WriteString("committer " + person.Draw(rt, "committer") + "\n")
+			b.WriteString("\n")
+			// Message lines are arbitrary printable ASCII: lines shaped
+			// exactly like "gpgsig ..." headers MUST survive as message
+			// content, never be mistaken for signature locations.
+			for i, n := 0, rapid.IntRange(1, 4).Draw(rt, "msglines"); i < n; i++ {
+				b.WriteString(rapid.StringMatching(`[ -~]{0,60}`).Draw(rt, "msg") + "\n")
+			}
+			payload = b.Bytes()
+			cs := &gitsign.CommitSig{Payload: payload}
+			if format == SHA256 {
+				cs.GpgsigSha256 = sig
+			} else {
+				cs.Gpgsig = sig
+			}
+			joined, err := gitsign.JoinCommit(cs)
+			if err != nil {
+				t.Fatalf("JoinCommit: %v", err)
+			}
+			raw, obj = joined, Object{Commit, format, joined}
+		} else {
+			var b bytes.Buffer
+			b.WriteString("object " + hex40.Draw(rt, "object") + "\n")
+			b.WriteString("type commit\n")
+			b.WriteString("tag v" + rapid.StringMatching(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}`).Draw(rt, "tagname") + "\n")
+			b.WriteString("tagger " + person.Draw(rt, "tagger") + "\n")
+			b.WriteString("\n")
+			// No '-' in tag messages: the in-body trailer is delimited by
+			// the PEM armor, so a message embedding armor markers is
+			// inherently ambiguous in git's own tag format.
+			for i, n := 0, rapid.IntRange(1, 4).Draw(rt, "msglines"); i < n; i++ {
+				b.WriteString(rapid.StringMatching(`[A-Za-z0-9 :@.gpsi]{0,60}`).Draw(rt, "msg") + "\n")
+			}
+			payload = b.Bytes()
+			joined, err := gitsign.JoinTag(&gitsign.TagSig{Payload: payload, InBody: sig})
+			if err != nil {
+				t.Fatalf("JoinTag: %v", err)
+			}
+			raw, obj = joined, Object{Tag, format, joined}
+		}
+
+		gotPayload, gotSig, err := splitSignature(obj)
+		if err != nil {
+			t.Fatalf("splitSignature(%s) = %v, want nil\nraw:\n%s", obj.Kind, err, raw)
+		}
+		if !bytes.Equal(gotPayload, payload) {
+			t.Fatalf("payload not byte-identical\ngot:\n%q\nwant:\n%q", gotPayload, payload)
+		}
+		if !bytes.Equal(gotSig, sig) {
+			t.Fatalf("signature not byte-identical\ngot:\n%q\nwant:\n%q", gotSig, sig)
+		}
+	})
 }

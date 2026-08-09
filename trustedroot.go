@@ -15,10 +15,18 @@ import (
 // raw bytes before parsing — a parse round-trip is not canonical, so
 // only the raw bytes are a stable identity (REQ-root-pinned-bytes) —
 // and rides into every VerifiedIdentity produced against this root.
+//
+// The fields are unexported so the parsed root and its digest can never
+// diverge: ParseTrustedRoot/LoadTrustedRoot are the only producers. The
+// zero value is unusable and rejected by Verify.
 type TrustedRoot struct {
-	Root   *root.TrustedRoot
-	Digest string // "sha256:<hex>" of the raw bytes
+	root   *root.TrustedRoot
+	digest string // "sha256:<hex>" of the raw bytes
 }
+
+// Digest returns the "sha256:<hex>" digest of the exact raw bytes this
+// root was parsed from (REQ-root-pinned-bytes).
+func (t *TrustedRoot) Digest() string { return t.digest }
 
 // ParseTrustedRoot pins and parses trusted-root bytes. Fully offline:
 // the bytes are the trust anchor, with no TUF refresh of any kind.
@@ -28,7 +36,7 @@ func ParseTrustedRoot(raw []byte) (*TrustedRoot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gitprov: parse trusted root: %w", err)
 	}
-	return &TrustedRoot{Root: tr, Digest: "sha256:" + hex.EncodeToString(sum[:])}, nil
+	return &TrustedRoot{root: tr, digest: "sha256:" + hex.EncodeToString(sum[:])}, nil
 }
 
 // LoadTrustedRoot reads and pins the trusted root at path.
@@ -50,7 +58,7 @@ func LoadTrustedRoot(path string) (*TrustedRoot, error) {
 func (t *TrustedRoot) fulcioPools() (roots, intermediates *x509.CertPool, err error) {
 	roots = x509.NewCertPool()
 	intermediates = x509.NewCertPool()
-	cas := t.Root.FulcioCertificateAuthorities()
+	cas := t.root.FulcioCertificateAuthorities()
 	if len(cas) == 0 {
 		return nil, nil, fmt.Errorf("gitprov: trusted root has no Fulcio certificate authorities")
 	}

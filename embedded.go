@@ -22,7 +22,7 @@ func HasEmbeddedRekor(obj Object) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, si, err := parseCMS(sig)
+	si, err := parseCMS(sig)
 	if err != nil {
 		return false, err
 	}

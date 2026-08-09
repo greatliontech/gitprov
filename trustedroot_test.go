@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,12 +14,10 @@ import (
 	"github.com/sigstore/sigstore-go/pkg/testing/ca"
 )
 
-// newVirtualTrustedRoot builds an in-memory sigstore trusted root from a
-// VirtualSigstore, marshals it to JSON, and writes it to a temp file. It
-// returns the path and the exact on-disk bytes (the digest pin is
-// computed over these bytes pre-parse, so tests recompute from the same
-// source).
-func newVirtualTrustedRoot(t *testing.T, vs *ca.VirtualSigstore) (path string, raw []byte) {
+// virtualTrustedRootBytes marshals an in-memory sigstore trusted root
+// built from a VirtualSigstore to its JSON wire form — the exact bytes
+// the digest pin is computed over.
+func virtualTrustedRootBytes(t *testing.T, vs *ca.VirtualSigstore) []byte {
 	t.Helper()
 	tr, err := root.NewTrustedRoot(
 		root.TrustedRootMediaType01,
@@ -31,36 +29,28 @@ func newVirtualTrustedRoot(t *testing.T, vs *ca.VirtualSigstore) (path string, r
 	if err != nil {
 		t.Fatalf("root.NewTrustedRoot: %v", err)
 	}
-	raw, err = tr.MarshalJSON()
+	raw, err := tr.MarshalJSON()
 	if err != nil {
 		t.Fatalf("TrustedRoot.MarshalJSON: %v", err)
 	}
-	path = filepath.Join(t.TempDir(), "trusted_root.json")
-	if err := os.WriteFile(path, raw, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return path, raw
+	return raw
 }
 
 func TestLoadTrustedRoot(t *testing.T) {
-	vs, err := ca.NewVirtualSigstore()
-	if err != nil {
-		t.Fatalf("NewVirtualSigstore: %v", err)
-	}
-
 	t.Run("happy: digest pins the exact on-disk bytes", func(t *testing.T) {
-		path, raw := newVirtualTrustedRoot(t, vs)
+		const path = "testdata/gitsign-fixture-trusted-root.json"
 		got, err := LoadTrustedRoot(path)
 		if err != nil {
 			t.Fatalf("LoadTrustedRoot: %v", err)
 		}
-		if got.Root == nil {
-			t.Fatal("LoadTrustedRoot returned nil Root")
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
 		}
 		sum := sha256.Sum256(raw)
 		want := "sha256:" + hex.EncodeToString(sum[:])
-		if got.Digest != want {
-			t.Fatalf("Digest = %q, want %q (sha256 of raw file bytes)", got.Digest, want)
+		if got.Digest() != want {
+			t.Fatalf("Digest = %q, want %q (sha256 of raw file bytes)", got.Digest(), want)
 		}
 		// ParseTrustedRoot over the same bytes pins identically: Load is
 		// read + Parse and nothing more.
@@ -68,24 +58,20 @@ func TestLoadTrustedRoot(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ParseTrustedRoot: %v", err)
 		}
-		if parsed.Digest != want {
-			t.Fatalf("ParseTrustedRoot digest = %q, want %q", parsed.Digest, want)
+		if parsed.Digest() != want {
+			t.Fatalf("ParseTrustedRoot digest = %q, want %q", parsed.Digest(), want)
 		}
 	})
 
 	t.Run("missing file", func(t *testing.T) {
-		_, err := LoadTrustedRoot(filepath.Join(t.TempDir(), "nope.json"))
+		_, err := LoadTrustedRoot("testdata/does-not-exist.json")
 		if err == nil || !strings.Contains(err.Error(), "read trusted root") {
 			t.Fatalf("LoadTrustedRoot = %v, want read error", err)
 		}
 	})
 
 	t.Run("malformed JSON", func(t *testing.T) {
-		p := filepath.Join(t.TempDir(), "bad.json")
-		if err := os.WriteFile(p, []byte("{not json"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		_, err := LoadTrustedRoot(p)
+		_, err := LoadTrustedRoot("testdata/malformed-trusted-root.json")
 		if err == nil || !strings.Contains(err.Error(), "parse trusted root") {
 			t.Fatalf("LoadTrustedRoot = %v, want parse error", err)
 		}
@@ -98,10 +84,9 @@ func TestFulcioPools(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewVirtualSigstore: %v", err)
 		}
-		path, _ := newVirtualTrustedRoot(t, vs)
-		tr, err := LoadTrustedRoot(path)
+		tr, err := ParseTrustedRoot(virtualTrustedRootBytes(t, vs))
 		if err != nil {
-			t.Fatalf("LoadTrustedRoot: %v", err)
+			t.Fatalf("ParseTrustedRoot: %v", err)
 		}
 		roots, intermediates, err := tr.fulcioPools()
 		if err != nil {
@@ -131,10 +116,52 @@ func TestFulcioPools(t *testing.T) {
 		if err != nil {
 			t.Fatalf("root.NewTrustedRoot(empty): %v", err)
 		}
-		tr := &TrustedRoot{Root: empty}
+		tr := &TrustedRoot{root: empty}
 		if _, _, err := tr.fulcioPools(); err == nil ||
 			!strings.Contains(err.Error(), "no Fulcio certificate authorities") {
 			t.Fatalf("fulcioPools = %v, want no-Fulcio-CA error", err)
 		}
 	})
+
+	t.Run("fulcio CAs carrying no root certificate are rejected", func(t *testing.T) {
+		nilRoot, err := root.NewTrustedRoot(root.TrustedRootMediaType01,
+			[]root.CertificateAuthority{&root.FulcioCertificateAuthority{}}, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("root.NewTrustedRoot(nil-root CA): %v", err)
+		}
+		tr := &TrustedRoot{root: nilRoot}
+		if _, _, err := tr.fulcioPools(); err == nil ||
+			!strings.Contains(err.Error(), "no usable Fulcio root certificates") {
+			t.Fatalf("fulcioPools = %v, want no-usable-roots error", err)
+		}
+	})
+
+	t.Run("non-fulcio CA implementations are skipped, not fatal", func(t *testing.T) {
+		vs, err := ca.NewVirtualSigstore()
+		if err != nil {
+			t.Fatalf("NewVirtualSigstore: %v", err)
+		}
+		mixed := append([]root.CertificateAuthority{stubCA{}}, vs.FulcioCertificateAuthorities()...)
+		tr0, err := root.NewTrustedRoot(root.TrustedRootMediaType01, mixed, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("root.NewTrustedRoot(mixed): %v", err)
+		}
+		tr := &TrustedRoot{root: tr0}
+		roots, _, err := tr.fulcioPools()
+		if err != nil {
+			t.Fatalf("fulcioPools(mixed) = %v, want nil: a foreign CA type must be skipped", err)
+		}
+		if roots == nil {
+			t.Fatal("fulcioPools(mixed) returned nil roots")
+		}
+	})
+}
+
+// stubCA is a CertificateAuthority that is not a
+// *root.FulcioCertificateAuthority — the foreign-implementation case
+// fulcioPools must skip.
+type stubCA struct{}
+
+func (stubCA) Verify(*x509.Certificate, time.Time) ([][]*x509.Certificate, error) {
+	return nil, fmt.Errorf("stub")
 }

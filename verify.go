@@ -46,8 +46,11 @@ func Verify(ctx context.Context, obj Object, id Identity, tr *TrustedRoot, requi
 	if err := id.Validate(); err != nil {
 		return nil, err
 	}
-	if tr == nil {
-		return nil, fmt.Errorf("gitprov: nil trusted root")
+	// tr.root is nil only for the zero value — the constructors are the
+	// sole producers of a populated TrustedRoot — and the zero value is
+	// an unusable root that must error, never panic downstream.
+	if tr == nil || tr.root == nil {
+		return nil, fmt.Errorf("gitprov: nil or uninitialized trusted root")
 	}
 
 	leaf, sig, err := verifyCertChain(ctx, obj, tr)
@@ -57,7 +60,7 @@ func Verify(ctx context.Context, obj Object, id Identity, tr *TrustedRoot, requi
 
 	vi := &VerifiedIdentity{
 		CertFingerprint:   certFingerprint(leaf),
-		TrustedRootDigest: tr.Digest,
+		TrustedRootDigest: tr.digest,
 	}
 	if requireTransparency {
 		tlog, err := offlineRekorVerify(ctx, sig, leaf, tr)
@@ -119,27 +122,27 @@ func certFingerprint(c *x509.Certificate) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
-// parseCMS PEM/DER-decodes a gitsign CMS signature to its SignedData
-// and first SignerInfo. This is the single CMS-structural-parse path of
-// the package (embedded-proof detection and signed-attrs extraction),
-// so the security-critical parse is audited in exactly one place.
-func parseCMS(sig []byte) (*protocol.SignedData, protocol.SignerInfo, error) {
+// parseCMS PEM/DER-decodes a gitsign CMS signature to its first
+// SignerInfo. This is the single CMS-structural-parse path of the
+// package (embedded-proof detection and signed-attrs extraction), so
+// the security-critical parse is audited in exactly one place.
+func parseCMS(sig []byte) (protocol.SignerInfo, error) {
 	der := sig
 	if blk, _ := pem.Decode(sig); blk != nil {
 		der = blk.Bytes
 	}
 	ci, err := protocol.ParseContentInfo(der)
 	if err != nil {
-		return nil, protocol.SignerInfo{}, fmt.Errorf("gitprov: parse CMS: %w", err)
+		return protocol.SignerInfo{}, fmt.Errorf("gitprov: parse CMS: %w", err)
 	}
 	sd, err := ci.SignedDataContent()
 	if err != nil {
-		return nil, protocol.SignerInfo{}, fmt.Errorf("gitprov: CMS signed-data: %w", err)
+		return protocol.SignerInfo{}, fmt.Errorf("gitprov: CMS signed-data: %w", err)
 	}
 	if len(sd.SignerInfos) == 0 {
-		return nil, protocol.SignerInfo{}, fmt.Errorf("gitprov: no signers in signature")
+		return protocol.SignerInfo{}, fmt.Errorf("gitprov: no signers in signature")
 	}
-	return sd, sd.SignerInfos[0], nil
+	return sd.SignerInfos[0], nil
 }
 
 // parseSignerInfo extracts the first CMS SignerInfo's signed-attrs
@@ -147,7 +150,7 @@ func parseCMS(sig []byte) (*protocol.SignedData, protocol.SignerInfo, error) {
 // and its unsigned attributes, asserting the signer cert is leaf. Used
 // by the embedded transparency verification path.
 func parseSignerInfo(sig []byte, leaf *x509.Certificate) (message, siSig []byte, attrs protocol.Attributes, err error) {
-	_, si, err := parseCMS(sig)
+	si, err := parseCMS(sig)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -179,7 +182,7 @@ func offlineRekorVerify(ctx context.Context, sig []byte, leaf *x509.Certificate,
 	if err := bindHashedRekordBody(ctx, e, message, siSig, leaf); err != nil {
 		return nil, err
 	}
-	if err := cosign.VerifyTLogEntryOffline(ctx, e, nil, tr.Root); err != nil {
+	if err := cosign.VerifyTLogEntryOffline(ctx, e, nil, tr.root); err != nil {
 		return nil, err
 	}
 	return e, nil

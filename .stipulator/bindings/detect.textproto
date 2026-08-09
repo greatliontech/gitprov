@@ -1,0 +1,20 @@
+# proto-file: proto/stipulator/v1/records.proto
+# proto-message: stipulator.v1.BindingSet
+
+bindings {
+  requirement_id: "REQ-detect-embedded"
+  content_hash: "992b384a7325ccfc93ed4b71179f5c1edae5b0cf70194489026947b84d6bd706"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.HasEmbeddedRekor"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "157506c1d5903643cfdd6498cb35e7e66cde8a4b6306a1e5f9c169d1f98abd26"
+}
+
+bindings {
+  requirement_id: "REQ-detect-embedded"
+  content_hash: "992b384a7325ccfc93ed4b71179f5c1edae5b0cf70194489026947b84d6bd706"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestHasEmbeddedRekor"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "49f7a646c2f9a0b93ae16cb64afd29c67ef68ab13ed8ff2cbf15a3b364f4f339"
+}
