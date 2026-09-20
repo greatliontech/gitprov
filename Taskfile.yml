@@ -15,7 +15,7 @@ tasks:
     desc: Vet and gofmt check
     cmds:
       - go vet ./...
-      - test -z "$(gofmt -l .)"
+      - test -z "$(gofmt -l . | tee /dev/stderr)"
 
   tidy:
     desc: Tidy the module graph

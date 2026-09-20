@@ -21,10 +21,18 @@ jobs:
         with:
           go-version: stable
       - run: go vet ./...
+      - run: test -z "$(gofmt -l . | tee /dev/stderr)"
       - run: go test -race -count=1 ./...
       # The suite pins rapid's seed for oracle determinism, which fixes
       # the property tests to one trajectory. This leg restores the
       # accumulating-coverage role: a per-run seed (the run id, so any
-      # failure is replayable) explores fresh examples every run.
+      # failure is replayable) explores fresh examples every run. The
+      # seed and the check count travel as rapid's environment
+      # defaults, which only a binary linking rapid reads, so every
+      # package runs and a package without property tests is not
+      # handed a flag it does not define.
       - name: property tests, varying seed
-        run: go test -count=1 -run 'TestSplitSignatureRoundTripsRawBytes|TestIdentityValidateAcceptsExactlyWellFormedPolicies|TestVerifyFailsClosedUnderCorruption' ./... -args -rapid.seed=${{ github.run_id }} -rapid.checks=500
+        run: go test -count=1 ./...
+        env:
+          RAPID_SEED: ${{ github.run_id }}
+          RAPID_CHECKS: "500"
