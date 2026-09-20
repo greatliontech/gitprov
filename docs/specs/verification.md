@@ -136,6 +136,40 @@ malformed signature, invalid chain, missing or unverifiable transparency
 proof, identity mismatch, unusable policy or trusted root — MUST yield
 an error and no verified identity; there is no partial success.
 
+## Pinned-key signatures
+
+Git signs with more than gitsign: an OpenPGP signature or an SSH
+signature stands in the same header and in-body trailer, and a caller
+holding the signer's public keys can verify it offline without
+sigstore. The library verifies those against exactly the keys the
+caller pins. What such a signature proves is that a holder of a pinned
+key signed the object; no transparency proof and no timestamp binds a
+time to it, so the library reports no signed time for it and the
+caller's policy carries that knowledge.
+
+**pinned key** (term): A public key the caller hands in for a
+verification: an OpenPGP public key or an SSH public key, verified
+against directly, never looked up.
+
+**REQ-verify-signature-kind** (behavior): The signature's PEM block
+type MUST select its verifier: `SIGNED MESSAGE` is gitsign's CMS
+signature, verified as this document states above; `PGP SIGNATURE` an
+OpenPGP signature; `SSH SIGNATURE` an SSH signature; any other type,
+and a signature whose bytes do not parse as its type states, fail
+closed. Lands: pb's pinned-key provenance plan.
+
+**REQ-verify-pinned-key** (behavior): An OpenPGP or SSH signature MUST
+verify against the caller's pinned keys and no other — the signing
+key identified among them by fingerprint, the signature verifying
+over the same raw object bytes REQ-verify-raw-bytes names, the object
+format the caller states — offline and without transparency, a
+verification the caller cannot request with transparency required.
+The verified outcome names the key's kind and fingerprint in place of
+a Fulcio identity, and every failure — no pinned key of the
+signature's kind, a signature by an unpinned key, a signature that
+does not verify — fails closed as REQ-verify-fail-closed says. Lands:
+pb's pinned-key provenance plan.
+
 ## Trusted root
 
 **REQ-root-pinned-bytes** (behavior): The trusted root MUST be loaded

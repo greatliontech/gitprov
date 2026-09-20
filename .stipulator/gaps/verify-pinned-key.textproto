@@ -1,0 +1,8 @@
+# proto-file: proto/stipulator/v1/records.proto
+# proto-message: stipulator.v1.Gap
+
+requirement_id: "REQ-verify-pinned-key"
+reason: "the pinned-key arms are specced ahead of pb's pinned-key provenance plan"
+content_hash: "e109ad75e9dcc33e42150ac0ff1b87e140d220fa9a89083f9aea7cb895d00af8"
+source_hash: "424092b950fe4c06198d0027f1e4930233cccb8b54284257e944ec05b8d3df43"
+lands { manual { condition: "pb's pinned-key provenance plan lands the arms" } }
