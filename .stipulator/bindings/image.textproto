@@ -1,0 +1,162 @@
+# proto-file: proto/stipulator/v1/records.proto
+# proto-message: stipulator.v1.BindingSet
+
+bindings {
+  requirement_id: "REQ-image-carriers"
+  content_hash: "107c7c14f2673629c0d01cec6fa519cae16604b09f2cd01b462066510de27451"
+  source_hash: "7a1849422ab4f300a9e3d38b688b5c4740a42f2b272cd339de17915c91a1cd24"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.VerifyImage"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "f7c35674f2e182cfd8d7098ba6a31fb8d0a558b991e36b34efbff8b2f6d7db3c"
+}
+
+bindings {
+  requirement_id: "REQ-image-carriers"
+  content_hash: "107c7c14f2673629c0d01cec6fa519cae16604b09f2cd01b462066510de27451"
+  source_hash: "7a1849422ab4f300a9e3d38b688b5c4740a42f2b272cd339de17915c91a1cd24"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageCarrierShape"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "5a8b79aa5b63f3c2da83b9f43b3653e140acbe5c618ba2ca7659fefe823796ff"
+}
+
+bindings {
+  requirement_id: "REQ-image-carriers"
+  content_hash: "107c7c14f2673629c0d01cec6fa519cae16604b09f2cd01b462066510de27451"
+  source_hash: "7a1849422ab4f300a9e3d38b688b5c4740a42f2b272cd339de17915c91a1cd24"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageBundle"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "72b0a1496c91ab1dc01967da19fae8f758d628d75e776bcc5d6e6c50bcf284f4"
+}
+
+bindings {
+  requirement_id: "REQ-image-carriers"
+  content_hash: "107c7c14f2673629c0d01cec6fa519cae16604b09f2cd01b462066510de27451"
+  source_hash: "7a1849422ab4f300a9e3d38b688b5c4740a42f2b272cd339de17915c91a1cd24"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageEnvelope"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "affcf999f12baa62a3df8d0c9a707a8d4747ac23ea172ba0e73341650c7b96eb"
+}
+
+bindings {
+  requirement_id: "REQ-image-digest-binding"
+  content_hash: "10c8aa142bbd4e9ca87dedc694a24865bffeaf63ea31f060e0ef25d1fb029de9"
+  source_hash: "585ed8668c461a27a647207171051b74db974a0f20312b95fe773ed8d904c68b"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.VerifyImage"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "f7c35674f2e182cfd8d7098ba6a31fb8d0a558b991e36b34efbff8b2f6d7db3c"
+}
+
+bindings {
+  requirement_id: "REQ-image-digest-binding"
+  content_hash: "10c8aa142bbd4e9ca87dedc694a24865bffeaf63ea31f060e0ef25d1fb029de9"
+  source_hash: "585ed8668c461a27a647207171051b74db974a0f20312b95fe773ed8d904c68b"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageDigestBinding"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "84826ca49d4c45c7a50606c4d517484e2137c476a4b4e4aefc6c0c9df09754fc"
+}
+
+bindings {
+  requirement_id: "REQ-image-digest-binding"
+  content_hash: "10c8aa142bbd4e9ca87dedc694a24865bffeaf63ea31f060e0ef25d1fb029de9"
+  source_hash: "585ed8668c461a27a647207171051b74db974a0f20312b95fe773ed8d904c68b"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageEnvelopeBinding"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "7eb2e6ea22efb0cc0868afa0eaa7607ad1d9697415b2e4bbe9008dd635e15adf"
+}
+
+bindings {
+  requirement_id: "REQ-image-offline-verification"
+  content_hash: "66fdfaccde413909ef7d6c3889f5de9239e8c11355a299218388698eed939040"
+  source_hash: "74817824f94c593e67196cd072d5c106a270675061b720468142bc743307da7a"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.VerifyImage"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "f7c35674f2e182cfd8d7098ba6a31fb8d0a558b991e36b34efbff8b2f6d7db3c"
+}
+
+bindings {
+  requirement_id: "REQ-image-offline-verification"
+  content_hash: "66fdfaccde413909ef7d6c3889f5de9239e8c11355a299218388698eed939040"
+  source_hash: "74817824f94c593e67196cd072d5c106a270675061b720468142bc743307da7a"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageUsesNoNetwork"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "61abba55d2a3bf19d883055af3bdae62dffa5556636d2829f4938d35d6e82fdd"
+}
+
+bindings {
+  requirement_id: "REQ-image-offline-verification"
+  content_hash: "66fdfaccde413909ef7d6c3889f5de9239e8c11355a299218388698eed939040"
+  source_hash: "74817824f94c593e67196cd072d5c106a270675061b720468142bc743307da7a"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageCheckpoint"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "ec0eda5596ec18a1bdccb8866f765a08b92e36b2e476d0c58e7034d8274331be"
+}
+
+bindings {
+  requirement_id: "REQ-image-offline-verification"
+  content_hash: "66fdfaccde413909ef7d6c3889f5de9239e8c11355a299218388698eed939040"
+  source_hash: "74817824f94c593e67196cd072d5c106a270675061b720468142bc743307da7a"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageLogKeyValidity"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "e144268ebd9da00c28b3928e85747a7a345760b3ca88a3c70157e14aa379ec73"
+}
+
+bindings {
+  requirement_id: "REQ-image-time-source"
+  content_hash: "7735533aabcb13b0c7db1a6af42268da1c59ab5d91a18c4e9acdcf10d8112e2a"
+  source_hash: "8d2b8447143d1eaea51f8bf538914ab5bc6df90e25c4338665b26950dd3b0ace"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.VerifyImage"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "f7c35674f2e182cfd8d7098ba6a31fb8d0a558b991e36b34efbff8b2f6d7db3c"
+}
+
+bindings {
+  requirement_id: "REQ-image-time-source"
+  content_hash: "7735533aabcb13b0c7db1a6af42268da1c59ab5d91a18c4e9acdcf10d8112e2a"
+  source_hash: "8d2b8447143d1eaea51f8bf538914ab5bc6df90e25c4338665b26950dd3b0ace"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageSignedTime"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "63372dc9601cc3168480c800140a51d70acd9a7ef1575f938ee931e5a9e4a6aa"
+}
+
+bindings {
+  requirement_id: "REQ-image-verified-identity"
+  content_hash: "61822a0721a855148750939db51a477a93fbf2fefd8940e2731d3392126c69e6"
+  source_hash: "a8f75aaf8ca515a5dadfc7c2f208fafcec15cc98248511d6f0d1dfeca4e83c0b"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.VerifyImage"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "f7c35674f2e182cfd8d7098ba6a31fb8d0a558b991e36b34efbff8b2f6d7db3c"
+}
+
+bindings {
+  requirement_id: "REQ-image-verified-identity"
+  content_hash: "61822a0721a855148750939db51a477a93fbf2fefd8940e2731d3392126c69e6"
+  source_hash: "a8f75aaf8ca515a5dadfc7c2f208fafcec15cc98248511d6f0d1dfeca4e83c0b"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageBundle"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "72b0a1496c91ab1dc01967da19fae8f758d628d75e776bcc5d6e6c50bcf284f4"
+}
+
+bindings {
+  requirement_id: "REQ-image-verified-identity"
+  content_hash: "61822a0721a855148750939db51a477a93fbf2fefd8940e2731d3392126c69e6"
+  source_hash: "a8f75aaf8ca515a5dadfc7c2f208fafcec15cc98248511d6f0d1dfeca4e83c0b"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyImageIdentityMismatch"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "5719f0cd1fc2ce1a058b9955a956e80744a78ff37e47657c91f020c692275759"
+}

@@ -260,3 +260,33 @@ bindings {
   role: BINDING_ROLE_TESTS
   shape_hash: "86fe21fe3bd3bddacffca0332b080b31e55b2ce5eb02113517355f451545c401"
 }
+
+bindings {
+  requirement_id: "REQ-verify-signed-time"
+  content_hash: "1cfd31d45a0abfcd42d452451c492eeff0b08c00c93500afc8faff474f4fc049"
+  source_hash: "1515b49b6a4c8215220f70c68a4a5a29be6807cda918047b48164bd1d21f0abd"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.offlineRekorVerify"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "dc4da855fe5c4ce21f3158f6ffed8ea56860f9e05febfcd8296fde3a1e34806a"
+}
+
+bindings {
+  requirement_id: "REQ-verify-signed-time"
+  content_hash: "1cfd31d45a0abfcd42d452451c492eeff0b08c00c93500afc8faff474f4fc049"
+  source_hash: "1515b49b6a4c8215220f70c68a4a5a29be6807cda918047b48164bd1d21f0abd"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestOfflineRekorVerify"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "3c5e760152042ee55eaed9440c2cbdb320896bf98f97e9bf90a7d49af0e33b23"
+}
+
+bindings {
+  requirement_id: "REQ-verify-signed-time"
+  content_hash: "1cfd31d45a0abfcd42d452451c492eeff0b08c00c93500afc8faff474f4fc049"
+  source_hash: "1515b49b6a4c8215220f70c68a4a5a29be6807cda918047b48164bd1d21f0abd"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerify"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "8a8510452caf2a84d6d494d987a1f3439192863255b0fe36af322065d9c706bb"
+}

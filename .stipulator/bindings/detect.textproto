@@ -20,3 +20,23 @@ bindings {
   role: BINDING_ROLE_TESTS
   shape_hash: "49f7a646c2f9a0b93ae16cb64afd29c67ef68ab13ed8ff2cbf15a3b364f4f339"
 }
+
+bindings {
+  requirement_id: "REQ-detect-image-time"
+  content_hash: "3f789f200f42d78bbcd66ec0f030f40b4870dd747cbc33b7cf53befe612c57fd"
+  source_hash: "3967e53b11dcdb4cdb327d9afbb59f1a97340559da130d13f4989e53b7f27d61"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.HasImageTime"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "e207d311da1d9fe79e2ff2fc21e9e5e6968c67fc19ee20c27fa360a04bbb1f1f"
+}
+
+bindings {
+  requirement_id: "REQ-detect-image-time"
+  content_hash: "3f789f200f42d78bbcd66ec0f030f40b4870dd747cbc33b7cf53befe612c57fd"
+  source_hash: "3967e53b11dcdb4cdb327d9afbb59f1a97340559da130d13f4989e53b7f27d61"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestHasImageTime"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "09ddfdb6283f545c649180f7b37ae1a71d32358da398e813207ed3607475c766"
+}
