@@ -1,13 +1,17 @@
-# gitprov — offline provenance verification of git objects
+# gitprov — offline provenance verification of git objects and images
 
-gitprov verifies that a git commit or annotated tag was signed by an
-identity a caller's policy accepts, fully offline. The signature model is
-sigstore keyless as produced by gitsign: a CMS signature over the raw
-object bytes, a short-lived Fulcio certificate carrying the signer's OIDC
-identity, and a Rekor transparency-log inclusion proof embedded in the
-signature itself. Trust is anchored solely in a pinned trusted-root file
-supplied by the caller. What a verified identity is *for* — which
-subjects a consumer requires, what gets recorded where — is the
+gitprov verifies that a git commit or annotated tag, or an OCI image
+manifest, was signed by an identity a caller's policy accepts, fully
+offline. The signature model is sigstore keyless: for git objects as
+gitsign produces it — a CMS signature over the raw object bytes, a
+short-lived Fulcio certificate carrying the signer's OIDC identity,
+and a Rekor transparency-log inclusion proof embedded in the
+signature itself; for images as cosign produces it — the same
+certificate and proof carried beside a signature over a payload
+naming the manifest digest (see Image signatures). Trust is anchored
+solely in a pinned trusted-root file supplied by the caller. What a
+verified identity is *for* — which subjects a consumer requires, what
+gets recorded where — is the
 consumer's contract, not this library's.
 
 **raw object bytes** (term): The git-core content of a commit or
@@ -16,10 +20,13 @@ git hashes and transports them. A re-encode through any library's object
 structs is not raw: signatures are computed over exact bytes, and only
 exact bytes can verify.
 
-**trusted root** (term): A sigstore TUF trusted-root JSON document — the
-Fulcio certificate authorities and Rekor transparency-log keys — loaded
-from bytes the caller pins. It is the sole trust anchor; nothing else is
-consulted.
+**trusted root** (term): A sigstore TUF trusted-root JSON document —
+the Fulcio certificate authorities, the Rekor transparency-log keys,
+the certificate-transparency log keys, and the timestamp authorities —
+loaded from bytes the caller pins. It is the sole trust anchor; nothing
+else is consulted. Git-object verification consults the authorities
+and the log keys; image verification consults all four (Image
+signatures).
 
 **embedded transparency proof** (term): The Rekor
 `TransparencyLogEntry`, carried as an unsigned attribute
@@ -40,7 +47,8 @@ components, character classes and alternatives, backslash quoting).
 verification: the certificate SAN that matched policy, the OIDC issuer,
 the leaf certificate's SHA-256 fingerprint, the digest of the trusted
 root verified against, and — when transparency was required — the Rekor
-log index and integration time.
+log index and integration time; for an image, the digest verified as
+well.
 
 ## Verification
 
@@ -112,6 +120,99 @@ those exact raw bytes before parsing — a parse round-trip is not
 canonical, so only the raw bytes are a stable identity — with the digest
 carried into every verified identity produced against it.
 
+## Image signatures
+
+**image signature** (term): A sigstore keyless signature over an OCI
+manifest or index digest, in one of the two carriers cosign produces,
+taken as bytes the caller fetched: where a carrier is found for a
+digest — the manifest's referrers, cosign's tag convention — and how
+many of them the caller judges are the consumer's contract, not this
+library's; each call verifies one carrier.
+
+**sigstore bundle** (term): A sigstore bundle of media type
+`application/vnd.dev.sigstore.bundle.v0.3+json` — the version the
+library reads — whose content is a DSSE envelope carrying exactly one
+signature over an in-toto v1 Statement, the digest signed in a
+subject's `digest` map under its algorithm, the predicate type
+`https://sigstore.dev/cosign/sign/v1`, and as verification material the
+Fulcio leaf certificate, a transparency-log entry — required: a bundle
+without one is not this carrier — and any RFC 3161 timestamps; the
+shape cosign's default `sign` writes, attached to the manifest as an
+OCI referrer whose artifact type is the bundle's media type.
+
+**simple-signing envelope** (term): A payload of media type
+`application/vnd.dev.cosign.simplesigning.v1+json` naming the digest
+signed at `critical.image.docker-manifest-digest`, with the signature
+over the payload bytes, the Fulcio leaf certificate, and the Rekor
+bundle — the signed entry timestamp with the entry's body, log index,
+log identifier, and integrated time — as cosign's legacy carrier
+annotates a signature layer, a certificate chain and an RFC 3161
+timestamp annotated or not; the shape cosign stores under the image
+repository's `sha256-<hex>.sig` tag, or as a referrer whose manifest
+names the configuration media type
+`application/vnd.dev.cosign.artifact.sig.v1+json`.
+
+**signed time** (term): A time bound to a signature by a key in the
+trusted root: a transparency entry's integrated time, which its signed
+entry timestamp binds, or an RFC 3161 timestamp over the signature from
+a pinned timestamp authority. A Rekor v2 entry carries an inclusion
+proof under a signed checkpoint and no entry timestamp; its time is a
+timestamp's.
+
+**REQ-image-carriers** (wire): The library MUST accept exactly the two
+carriers, a sigstore bundle and a simple-signing envelope; any other
+carrier, or one missing a part its term names as required, fails
+verification.
+
+**REQ-image-digest-binding** (invariant): The digest in hand MUST be
+the digest the signed content names — one of the statement's subjects
+for a bundle, the payload's manifest digest for a simple-signing
+envelope — the algorithm compared exactly and the digest as decoded
+bytes, after the signature has verified over the carried bytes: the
+DSSE pre-authentication encoding of the carried statement for a bundle,
+the carried payload for an envelope. The payload is never regenerated
+from the digest in hand — a regenerated payload would verify bytes the
+signer never signed, as REQ-verify-raw-bytes holds for git objects —
+and a signature whose content names another digest, or none, fails.
+
+**REQ-image-offline-verification** (behavior): An image signature MUST
+verify as a git object does (REQ-verify-offline), fully offline
+against the pinned trusted root. The leaf's chain verifies against
+the root's Fulcio authorities, and its signed certificate timestamp
+against the root's certificate-transparency log keys. The
+transparency entry verifies against the root's log keys, the key
+selected by the entry's log identifier and valid at the signed time
+as the root states its validity: for a bundle, the inclusion proof
+under its checkpoint — a Rekor v1 checkpoint carrying its own origin,
+a Rekor v2 checkpoint's origin being the host of the pinned log's
+base URL, so a root naming that log without one admits no v2 entry —
+and, where carried, the signed entry timestamp; for a simple-signing
+envelope, the signed entry timestamp over an entry body reconstructed
+from the payload digest, the signature bytes, and the leaf, as
+REQ-verify-embedded-rekor binds a git object's proof. Every RFC 3161
+timestamp carried verifies against a pinned authority — every one,
+deliberately: a timestamp no pinned authority verifies fails the
+carrier even where the entry alone would supply the signed time. The
+leaf's identity matches the caller's policy on both axes
+(REQ-verify-identity-match). Every failure yields an error and no
+verified identity (REQ-verify-fail-closed).
+
+**REQ-image-time-source** (invariant): A Fulcio leaf is short-lived, so
+its validity MUST be judged at a signed time — never at the time of
+verification, and never at a time the carrier asserts unsigned. A
+carrier with no signed time has no time at which its certificate can
+be judged, is unverifiable, and fails. A timestamp supplies the time
+an entry without an entry timestamp cannot; it never stands in for
+the entry: transparency is not a per-call choice for an image
+signature as it is for a git object, and a carrier with a timestamp
+and no entry is not a carrier at all (REQ-image-carriers).
+
+**REQ-image-verified-identity** (behavior): A verified image signature
+MUST yield the verified identity with the digest verified and, as its
+integration time, the signed time the leaf was judged at — an
+integrated time nothing signs is never recorded as proven — so a
+consumer records exactly what was proven and against what.
+
 ## Detection
 
 **REQ-detect-embedded** (behavior): The library MUST expose a detection
@@ -120,3 +221,11 @@ transparency proof, without establishing any trust — consumers route on
 it to produce precise unverifiable-versus-invalid diagnostics — and the
 predicate fails on unsigned or structurally malformed objects rather
 than answering false.
+
+**REQ-detect-image-time** (behavior): The library MUST expose the same
+predicate for an image carrier: whether it carries the material a
+signed time would come from — an entry with an entry timestamp, or an
+RFC 3161 timestamp — without verifying any of it, so a consumer
+distinguishes an unverifiable carrier from an invalid one; the
+predicate fails on a carrier that is neither shape rather than
+answering false.
