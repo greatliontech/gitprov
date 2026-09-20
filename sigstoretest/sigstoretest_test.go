@@ -5,10 +5,13 @@ import (
 	"context"
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"runtime"
 	"strings"
 	"sync"
@@ -17,7 +20,9 @@ import (
 
 	"github.com/greatliontech/gitprov"
 	"github.com/greatliontech/gitprov/sigstoretest"
+	gitsign "github.com/sigstore/gitsign/pkg/git"
 	protobundle "github.com/sigstore/protobuf-specs/gen/pb-go/bundle/v1"
+	protorekor "github.com/sigstore/protobuf-specs/gen/pb-go/rekor/v1"
 	"github.com/sigstore/rekor/pkg/util"
 	"github.com/sigstore/sigstore-go/pkg/tlog"
 	"github.com/sigstore/sigstore/pkg/signature"
@@ -83,7 +88,7 @@ func TestCarriersVerify(t *testing.T) {
 	edge := time.Now().Add(-59 * time.Second) // a leaf is valid from a minute before its issue
 	for name, c := range map[string]gitprov.ImageCarrier{
 		"bundle":           s.Bundle(t, digest, subject, issuer, sigstoretest.BundleOptions{}),
-		"bundle at edge":   s.Bundle(t, digest, subject, issuer, sigstoretest.BundleOptions{IntegratedAt: edge}),
+		"bundle at edge":   s.Bundle(t, digest, subject, issuer, sigstoretest.BundleOptions{Entry: sigstoretest.EntryOptions{IntegratedAt: edge}}),
 		"envelope":         s.Envelope(t, digest, subject, issuer, sigstoretest.EnvelopeOptions{}),
 		"envelope at edge": s.Envelope(t, digest, subject, issuer, sigstoretest.EnvelopeOptions{IntegratedAt: edge, Timestamp: true, WithChain: true}),
 	} {
@@ -100,10 +105,10 @@ func TestBuildersRefuse(t *testing.T) {
 	s := sigstoretest.New(t)
 	for name, build := range map[string]func(*recorder){
 		"bundle past validity": func(r *recorder) {
-			s.Bundle(r, digest, subject, issuer, sigstoretest.BundleOptions{IntegratedAt: time.Now().Add(time.Hour)})
+			s.Bundle(r, digest, subject, issuer, sigstoretest.BundleOptions{Entry: sigstoretest.EntryOptions{IntegratedAt: time.Now().Add(time.Hour)}})
 		},
 		"bundle before validity": func(r *recorder) {
-			s.Bundle(r, digest, subject, issuer, sigstoretest.BundleOptions{IntegratedAt: time.Now().Add(-time.Hour)})
+			s.Bundle(r, digest, subject, issuer, sigstoretest.BundleOptions{Entry: sigstoretest.EntryOptions{IntegratedAt: time.Now().Add(-time.Hour)}})
 		},
 		"envelope past validity": func(r *recorder) {
 			s.Envelope(r, digest, subject, issuer, sigstoretest.EnvelopeOptions{IntegratedAt: time.Now().Add(time.Hour)})
@@ -191,7 +196,7 @@ func TestLogEntryVerifies(t *testing.T) {
 		t.Fatalf("the checkpoint is not the log's over the proof: %+v", cp.Checkpoint)
 	}
 	// Another log's checkpoint over the same tree is not this log's.
-	foreign := s.LogEntryWith(t, leaf, hashedRekord(t, leaf, key, []byte("signed bytes")), time.Time{}, sigstoretest.EntryOptions{CheckpointBy: sigstoretest.New(t)})
+	foreign := s.LogEntryWith(t, leaf, hashedRekord(t, leaf, key, []byte("signed bytes")), sigstoretest.EntryOptions{CheckpointBy: sigstoretest.New(t)})
 	if err := cp.UnmarshalText([]byte(foreign.InclusionProof.Checkpoint.Envelope)); err != nil {
 		t.Fatal(err)
 	}
@@ -225,6 +230,113 @@ func TestConcurrentUse(t *testing.T) {
 	for i, r := range recorders {
 		if r.failed != "" {
 			t.Errorf("goroutine %d: %s", i, r.failed)
+		}
+	}
+}
+
+// A signed tag verifies as gitsign's offline mode writes one: the
+// signature under the PEM marker gitsign's verifier accepts; with the
+// log's entry embedded it verifies with transparency required; with
+// none it carries no proof; the entry's options shape the entry; a
+// shape of the test's own is what is embedded, and one with no
+// checkpoint is what the verifier then judges.
+func TestSignedTagVerifies(t *testing.T) {
+	s := sigstoretest.New(t)
+	leaf, key := s.Leaf(t, subject, issuer)
+	id := gitprov.Identity{Subject: subject, Issuer: issuer}
+	payload := []byte("object 0123456789abcdef0123456789abcdef01234567\ntype commit\ntag v1\n" +
+		"tagger Test Signer <signer@example.com> 1700000100 +0000\n\nrelease v1\n")
+	tag := s.SignedTag(t, leaf, key, payload, sigstoretest.TagOptions{})
+	// The marker: gitsign's verifier reads only a "SIGNED MESSAGE"
+	// block, which gitprov's parser does not check, so the builder's
+	// fidelity is pinned here.
+	ts, err := gitsign.SplitTag(bytes.NewReader(tag))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(ts.Payload, payload) {
+		t.Fatalf("the tag's payload = %q", ts.Payload)
+	}
+	if blk, rest := pem.Decode(ts.InBody); blk == nil || blk.Type != "SIGNED MESSAGE" || len(rest) != 0 {
+		t.Fatalf("the signature block: %+v, rest %q", blk, rest)
+	}
+	obj := gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: tag}
+	if _, err := gitprov.Verify(context.Background(), obj, id, s.TrustedRoot(), true); err != nil {
+		t.Fatalf("the log's entry embedded: %v", err)
+	}
+	bare := gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: s.SignedTag(t, leaf, key, payload, sigstoretest.TagOptions{NoEntry: true})}
+	if has, err := gitprov.HasEmbeddedRekor(bare); err != nil || has {
+		t.Fatalf("no entry embedded: has=%v %v", has, err)
+	}
+	if _, err := gitprov.Verify(context.Background(), bare, id, s.TrustedRoot(), false); err != nil {
+		t.Fatalf("no entry, transparency not required: %v", err)
+	}
+	// The entry options shape the embedded entry: a checkpoint another
+	// log signed fails verification.
+	foreign := gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: s.SignedTag(t, leaf, key, payload, sigstoretest.TagOptions{Entry: sigstoretest.EntryOptions{CheckpointBy: sigstoretest.New(t)}})}
+	if _, err := gitprov.Verify(context.Background(), foreign, id, s.TrustedRoot(), true); err == nil || !strings.Contains(err.Error(), "checkpoint") {
+		t.Fatalf("a checkpoint another log signed: %v", err)
+	}
+	// A shape of the test's own is what is embedded: the log's entry
+	// with its checkpoint dropped, which the verifier judges as such.
+	shaped := 0
+	unanchored := gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: s.SignedTag(t, leaf, key, payload, sigstoretest.TagOptions{Shape: func(message, sig []byte) *protorekor.TransparencyLogEntry {
+		shaped++
+		if len(message) == 0 || len(sig) == 0 {
+			t.Fatal("the shape saw no message or signature")
+		}
+		body, err := gitprov.HashedRekordBody(context.Background(), message, sig, leaf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e := s.LogEntry(t, leaf, body, time.Time{})
+		e.InclusionProof.Checkpoint = nil
+		return e
+	}})}
+	if shaped != 1 {
+		t.Fatalf("the shape ran %d times", shaped)
+	}
+	if _, err := gitprov.Verify(context.Background(), unanchored, id, s.TrustedRoot(), true); err == nil || !strings.Contains(err.Error(), "carries none") {
+		t.Fatalf("the shaped entry without a checkpoint: %v", err)
+	}
+}
+
+// The signed-tag builder refuses what it cannot build faithfully: a
+// leaf whose key is not ECDSA, a key not the leaf's, NoEntry beside
+// a shape, a shape returning no entry.
+func TestSignedTagRefuses(t *testing.T) {
+	s := sigstoretest.New(t)
+	leaf, key := s.Leaf(t, subject, issuer)
+	_, other := s.Leaf(t, subject, issuer)
+	payload := []byte("object 0123456789abcdef0123456789abcdef01234567\ntype commit\ntag v1\n" +
+		"tagger Test Signer <signer@example.com> 1700000100 +0000\n\nrelease v1\n")
+	none := func(message, sig []byte) *protorekor.TransparencyLogEntry { return nil }
+	// A leaf from outside the sigstore, its key not ECDSA at all.
+	edPub, edKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{SerialNumber: big.NewInt(1)}, &x509.Certificate{SerialNumber: big.NewInt(1)}, edPub, edKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edLeaf, err := x509.ParseCertificate(edDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, c := range map[string]struct {
+		leaf *x509.Certificate
+		key  *ecdsa.PrivateKey
+		opts sigstoretest.TagOptions
+		want string
+	}{
+		"a leaf not ECDSA":       {edLeaf, key, sigstoretest.TagOptions{}, "not ECDSA"},
+		"a key not the leaf's":   {leaf, other, sigstoretest.TagOptions{}, "not the leaf's"},
+		"NoEntry beside a shape": {leaf, key, sigstoretest.TagOptions{NoEntry: true, Shape: none}, "conflict"},
+		"a shape returning nil":  {leaf, key, sigstoretest.TagOptions{Shape: none}, "no entry"},
+	} {
+		if failed := record(t, func(r *recorder) { s.SignedTag(r, c.leaf, c.key, payload, c.opts) }); !strings.Contains(failed, c.want) {
+			t.Errorf("%s: failed with %q, want %q", name, failed, c.want)
 		}
 	}
 }

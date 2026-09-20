@@ -9,6 +9,10 @@
 // bytes path a real one takes, so what the fixtures verify against
 // is what a caller pins.
 //
+// The builders make cosign's two carriers and gitsign's signed tag,
+// each over a leaf — the carriers' issued here, the tag's handed in —
+// and, where one is carried, an entry this log signed.
+//
 // Nothing here is a fixture of real bytes: the shapes are cosign's
 // and gitsign's, their markers spelled here on their own so a test of
 // the verifier's checks does not share the verifier's constants. The
@@ -32,6 +36,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -61,7 +66,11 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	cms "github.com/github/smimesign/ietf-cms"
+	"github.com/github/smimesign/ietf-cms/protocol"
 	"github.com/greatliontech/gitprov"
+	gitsign "github.com/sigstore/gitsign/pkg/git"
+	"google.golang.org/protobuf/proto"
 )
 
 // Sigstore is one synthetic sigstore: the virtual timestamp
@@ -374,11 +383,15 @@ func signedTimeFor(t testing.TB, at time.Time, leaf *x509.Certificate) time.Time
 // this log signed.
 func (s *Sigstore) LogEntry(t testing.TB, leaf *x509.Certificate, body []byte, at time.Time) *protorekor.TransparencyLogEntry {
 	t.Helper()
-	return s.LogEntryWith(t, leaf, body, at, EntryOptions{})
+	return s.LogEntryWith(t, leaf, body, EntryOptions{IntegratedAt: at})
 }
 
 // EntryOptions shape an entry away from the default.
 type EntryOptions struct {
+	// IntegratedAt is the entry's integrated time, now when zero; it
+	// must fall in the leaf's window (New), the builder failing the
+	// test otherwise.
+	IntegratedAt time.Time
 	// CheckpointBy is the log whose key signs the entry's checkpoint
 	// in place of this sigstore's: a checkpoint no pinned key
 	// verifies.
@@ -389,13 +402,13 @@ type EntryOptions struct {
 }
 
 // LogEntryWith is LogEntry under options.
-func (s *Sigstore) LogEntryWith(t testing.TB, leaf *x509.Certificate, body []byte, at time.Time, o EntryOptions) *protorekor.TransparencyLogEntry {
+func (s *Sigstore) LogEntryWith(t testing.TB, leaf *x509.Certificate, body []byte, o EntryOptions) *protorekor.TransparencyLogEntry {
 	t.Helper()
 	checkpointBy := s
 	if o.CheckpointBy != nil {
 		checkpointBy = o.CheckpointBy
 	}
-	at = signedTimeFor(t, at, leaf)
+	at := signedTimeFor(t, o.IntegratedAt, leaf)
 	var kind struct{ Kind, APIVersion string }
 	if err := json.Unmarshal(body, &kind); err != nil {
 		t.Fatalf("sigstoretest: entry body: %v", err)
@@ -431,6 +444,100 @@ func (s *Sigstore) LogEntryWith(t testing.TB, leaf *x509.Certificate, body []byt
 		CanonicalizedBody: body,
 	}
 }
+
+// oidEmbeddedEntry is the CMS unsigned attribute gitsign embeds the
+// entry under, spelled here on its own.
+var oidEmbeddedEntry = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 57264, 3, 1}
+
+// TagOptions shape a signed tag away from the default, the log's own
+// entry embedded.
+type TagOptions struct {
+	// NoEntry embeds no entry: a signature carrying no transparency
+	// proof.
+	NoEntry bool
+	// Entry shapes the embedded entry; moot under NoEntry or Shape.
+	Entry EntryOptions
+	// Shape replaces the embedded entry outright, built over the CMS
+	// signature's message and signature bytes, for a test of what a
+	// verifier binds; nil embeds the log's own entry. Beside NoEntry
+	// it is a conflict the builder fails the test on, as is a shape
+	// returning nil: NoEntry is how a tag carries no entry.
+	Shape func(message, sig []byte) *protorekor.TransparencyLogEntry
+}
+
+// SignedTag signs payload as gitsign's offline mode writes a tag: a
+// detached CMS signature by leaf, the log's entry over that signature
+// — its body the HashedRekord a verifier reconstructs from the signed
+// attributes, the signature bytes and the leaf — embedded as the
+// unsigned attribute, the signature appended in-body. The leaf and
+// key are the caller's, a pair (Leaf); a key not the leaf's fails the
+// test. Returns the raw tag bytes.
+func (s *Sigstore) SignedTag(t testing.TB, leaf *x509.Certificate, key *ecdsa.PrivateKey, payload []byte, o TagOptions) []byte {
+	t.Helper()
+	pub, ok := leaf.PublicKey.(*ecdsa.PublicKey)
+	if !ok {
+		t.Fatalf("sigstoretest: the leaf's key is %T, not ECDSA", leaf.PublicKey)
+	}
+	if !pub.Equal(&key.PublicKey) {
+		t.Fatal("sigstoretest: the key is not the leaf's")
+	}
+	if o.NoEntry && o.Shape != nil {
+		t.Fatal("sigstoretest: NoEntry and Shape conflict")
+	}
+	der, err := cms.SignDetached(payload, []*x509.Certificate{leaf}, key)
+	if err != nil {
+		t.Fatalf("sigstoretest: sign: %v", err)
+	}
+	if !o.NoEntry {
+		ci, err := protocol.ParseContentInfo(der)
+		if err != nil {
+			t.Fatalf("sigstoretest: parse the signature: %v", err)
+		}
+		sd, err := ci.SignedDataContent()
+		if err != nil {
+			t.Fatalf("sigstoretest: signed data: %v", err)
+		}
+		si := &sd.SignerInfos[0]
+		message, err := si.SignedAttrs.MarshaledForVerification()
+		if err != nil {
+			t.Fatalf("sigstoretest: signed attributes: %v", err)
+		}
+		var entry *protorekor.TransparencyLogEntry
+		if o.Shape != nil {
+			if entry = o.Shape(message, si.Signature); entry == nil {
+				t.Fatal("sigstoretest: the shape returned no entry; NoEntry embeds none")
+			}
+		} else {
+			body, err := gitprov.HashedRekordBody(context.Background(), message, si.Signature, leaf)
+			if err != nil {
+				t.Fatalf("sigstoretest: entry body: %v", err)
+			}
+			entry = s.LogEntryWith(t, leaf, body, o.Entry)
+		}
+		raw, err := proto.Marshal(entry)
+		if err != nil {
+			t.Fatalf("sigstoretest: marshal the entry: %v", err)
+		}
+		attr, err := protocol.NewAttribute(oidEmbeddedEntry, raw)
+		if err != nil {
+			t.Fatalf("sigstoretest: the entry attribute: %v", err)
+		}
+		si.UnsignedAttrs = append(si.UnsignedAttrs, attr)
+		if der, err = sd.ContentInfoDER(); err != nil {
+			t.Fatalf("sigstoretest: encode the signature: %v", err)
+		}
+	}
+	sig := pem.EncodeToMemory(&pem.Block{Type: tagSignatureMarker, Bytes: der})
+	tag, err := gitsign.JoinTag(&gitsign.TagSig{Payload: payload, InBody: sig})
+	if err != nil {
+		t.Fatalf("sigstoretest: join the tag: %v", err)
+	}
+	return tag
+}
+
+// tagSignatureMarker is the PEM block type gitsign writes a tag's
+// signature under and its verifier accepts, spelled here on its own.
+const tagSignatureMarker = "SIGNED MESSAGE"
 
 // signEntry is the log's signed entry timestamp over an entry's
 // coordinates — the body, the integrated time, the index, the log —
@@ -478,18 +585,11 @@ type BundleOptions struct {
 	// from that authority beside the first. Both are moot under
 	// NoTimestamp.
 	TimestampBy, ExtraTimestampBy *Sigstore
-	// CheckpointBy is the log whose key signs the entry's checkpoint
-	// in place of this sigstore's, a checkpoint no pinned key
-	// verifies; CheckpointSize the tree size it names in place of the
-	// proof's. Both are moot under NoEntry.
-	CheckpointBy   *Sigstore
-	CheckpointSize uint64
+	// Entry shapes the entry: its integrated time, its checkpoint.
+	// Moot under NoEntry.
+	Entry EntryOptions
 	// MediaType replaces the bundle's.
 	MediaType string
-	// IntegratedAt is the entry's integrated time, now when zero; it
-	// must fall in the leaf's window (New), the builder failing the
-	// test otherwise.
-	IntegratedAt time.Time
 }
 
 // Bundle builds a sigstore bundle as cosign's default sign would for
@@ -517,7 +617,6 @@ func (s *Sigstore) Bundle(t testing.TB, digest, subject, issuer string, o Bundle
 	if err != nil {
 		t.Fatal(err)
 	}
-	at := signedTimeFor(t, o.IntegratedAt, leaf)
 	pb := &protobundle.Bundle{
 		MediaType: "application/vnd.dev.sigstore.bundle.v0.3+json",
 		VerificationMaterial: &protobundle.VerificationMaterial{
@@ -530,11 +629,14 @@ func (s *Sigstore) Bundle(t testing.TB, digest, subject, issuer string, o Bundle
 	if !o.NoEntry {
 		// The virtual sigstore canonicalizes the DSSE entry body; the
 		// entry the bundle carries is the log's over that body.
-		entry, err := s.vs.GenerateTlogEntry(leaf, env, sig, at.Unix(), false)
+		// Only the body is taken from the virtual sigstore's entry, and
+		// it names no time; the log's own entry over it carries the
+		// time and the checkpoint the options name.
+		entry, err := s.vs.GenerateTlogEntry(leaf, env, sig, 0, false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		tle := s.LogEntryWith(t, leaf, entry.TransparencyLogEntry().CanonicalizedBody, at, EntryOptions{CheckpointBy: o.CheckpointBy, CheckpointSize: o.CheckpointSize})
+		tle := s.LogEntryWith(t, leaf, entry.TransparencyLogEntry().CanonicalizedBody, o.Entry)
 		if o.NoPromise {
 			tle.InclusionPromise = nil
 		}
@@ -616,7 +718,10 @@ type EnvelopeOptions struct {
 	NamedDigest, PayloadType string
 	// IntegratedAt is the Rekor bundle's integrated time, now when
 	// zero; it must fall in the leaf's window (New), the builder
-	// failing the test otherwise; moot under NoRekorBundle.
+	// failing the test otherwise; moot under NoRekorBundle. The time
+	// stands alone rather than as EntryOptions: the bundle is Rekor's
+	// v1 shape, a signed entry timestamp and no checkpoint, so the
+	// checkpoint's knobs have nothing to shape here.
 	IntegratedAt time.Time
 }
 

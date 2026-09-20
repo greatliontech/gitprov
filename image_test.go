@@ -31,8 +31,10 @@ func imagePolicy() gitprov.Identity {
 func TestVerifyImageBundle(t *testing.T) {
 	s := sigstoretest.New(t)
 	tr := s.TrustedRoot()
-	at := time.Now().Truncate(time.Second)
-	b := s.Bundle(t, imageDigest, imageIdentity, imageIssuer, sigstoretest.BundleOptions{IntegratedAt: at})
+	// A time not now, within the leaf's window, so the entry's time
+	// is what the option named and not the builder's clock.
+	at := time.Now().Add(-30 * time.Second).Truncate(time.Second)
+	b := s.Bundle(t, imageDigest, imageIdentity, imageIssuer, sigstoretest.BundleOptions{Entry: sigstoretest.EntryOptions{IntegratedAt: at}})
 	vi, err := gitprov.VerifyImage(context.Background(), imageDigest, b, imagePolicy(), tr)
 	if err != nil {
 		t.Fatalf("gitprov.VerifyImage: %v", err)
@@ -57,7 +59,7 @@ func TestVerifyImageBundle(t *testing.T) {
 // the pinned one (REQ-image-offline-verification).
 func TestVerifyImageCheckpoint(t *testing.T) {
 	s := sigstoretest.New(t)
-	b := s.Bundle(t, imageDigest, imageIdentity, imageIssuer, sigstoretest.BundleOptions{CheckpointBy: sigstoretest.New(t)})
+	b := s.Bundle(t, imageDigest, imageIdentity, imageIssuer, sigstoretest.BundleOptions{Entry: sigstoretest.EntryOptions{CheckpointBy: sigstoretest.New(t)}})
 	_, err := gitprov.VerifyImage(context.Background(), imageDigest, b, imagePolicy(), s.TrustedRoot())
 	if err == nil || !strings.Contains(err.Error(), "checkpoint") {
 		t.Fatalf("a checkpoint another log signed: %v", err)
@@ -65,7 +67,7 @@ func TestVerifyImageCheckpoint(t *testing.T) {
 	// One the log signed over another tree state names a size the
 	// proof does not: the verifier's own checks pass it, the rule here
 	// does not.
-	b = s.Bundle(t, imageDigest, imageIdentity, imageIssuer, sigstoretest.BundleOptions{CheckpointSize: 3})
+	b = s.Bundle(t, imageDigest, imageIdentity, imageIssuer, sigstoretest.BundleOptions{Entry: sigstoretest.EntryOptions{CheckpointSize: 3}})
 	_, err = gitprov.VerifyImage(context.Background(), imageDigest, b, imagePolicy(), s.TrustedRoot())
 	if err == nil || !strings.Contains(err.Error(), "names a tree of 3, the inclusion proof 2") {
 		t.Fatalf("a checkpoint over another size: %v", err)
@@ -163,13 +165,13 @@ func TestVerifyImageSignedTime(t *testing.T) {
 		ok   bool
 		want string
 	}{
-		{"v1 entry, no timestamp", sigstoretest.BundleOptions{NoTimestamp: true, IntegratedAt: at}, true, ""},
-		{"v2 entry with timestamp", sigstoretest.BundleOptions{NoPromise: true, IntegratedAt: at}, true, ""},
+		{"v1 entry, no timestamp", sigstoretest.BundleOptions{NoTimestamp: true, Entry: sigstoretest.EntryOptions{IntegratedAt: at}}, true, ""},
+		{"v2 entry with timestamp", sigstoretest.BundleOptions{NoPromise: true, Entry: sigstoretest.EntryOptions{IntegratedAt: at}}, true, ""},
 		{"v2 entry without timestamp", sigstoretest.BundleOptions{NoPromise: true, NoTimestamp: true}, false, "timestamp"},
 		{"timestamp without entry", sigstoretest.BundleOptions{NoEntry: true}, false, "not one: not this carrier"},
-		{"foreign timestamp beside a v1 entry", sigstoretest.BundleOptions{TimestampBy: foreign, IntegratedAt: at}, false, "no pinned authority"},
-		{"a foreign timestamp beside a pinned one", sigstoretest.BundleOptions{ExtraTimestampBy: foreign, IntegratedAt: at}, false, "no pinned authority"},
-		{"two timestamps from the pinned authority", sigstoretest.BundleOptions{ExtraTimestampBy: s, IntegratedAt: at}, true, ""},
+		{"foreign timestamp beside a v1 entry", sigstoretest.BundleOptions{TimestampBy: foreign, Entry: sigstoretest.EntryOptions{IntegratedAt: at}}, false, "no pinned authority"},
+		{"a foreign timestamp beside a pinned one", sigstoretest.BundleOptions{ExtraTimestampBy: foreign, Entry: sigstoretest.EntryOptions{IntegratedAt: at}}, false, "no pinned authority"},
+		{"two timestamps from the pinned authority", sigstoretest.BundleOptions{ExtraTimestampBy: s, Entry: sigstoretest.EntryOptions{IntegratedAt: at}}, true, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
