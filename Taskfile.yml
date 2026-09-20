@@ -9,7 +9,7 @@ tasks:
   test:
     desc: Run tests
     cmds:
-      - go test ./...
+      - go test -race ./...
 
   lint:
     desc: Vet and gofmt check

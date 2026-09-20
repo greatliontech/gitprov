@@ -416,7 +416,7 @@ func verifyEnvelope(ctx context.Context, e SimpleSigningEnvelope, alg string, su
 	if err := json.Unmarshal([]byte(e.RekorBundle), &rb); err != nil {
 		return fail("Rekor bundle: %w", err)
 	}
-	body, err := hashedRekordBody(ctx, e.Payload, sig, leaf)
+	body, err := HashedRekordBody(ctx, e.Payload, sig, leaf)
 	if err != nil {
 		return fail("entry body: %w", err)
 	}

@@ -66,7 +66,7 @@ func entryFromAttrs(attrs protocol.Attributes) (*models.LogEntryAnon, error) {
 // Merkle inclusion commits to this exact HashedRekord passes. Faithful port
 // of the body-recompute half of gitsign internal/rekor/oid.ToLogEntry.
 func bindHashedRekordBody(ctx context.Context, e *models.LogEntryAnon, message, sig []byte, cert *x509.Certificate) error {
-	body, err := hashedRekordBody(ctx, message, sig, cert)
+	body, err := HashedRekordBody(ctx, message, sig, cert)
 	if err != nil {
 		return err
 	}
@@ -74,10 +74,10 @@ func bindHashedRekordBody(ctx context.Context, e *models.LogEntryAnon, message, 
 	return nil
 }
 
-// hashedRekordBody is the canonical HashedRekord entry body for
+// HashedRekordBody is the canonical HashedRekord entry body for
 // (message, sig, cert): the shape both a git object's embedded entry
 // and a simple-signing envelope's Rekor bundle must have logged.
-func hashedRekordBody(ctx context.Context, message, sig []byte, cert *x509.Certificate) ([]byte, error) {
+func HashedRekordBody(ctx context.Context, message, sig []byte, cert *x509.Certificate) ([]byte, error) {
 	hash := sha256.Sum256(message)
 	certPEM, err := cryptoutils.MarshalCertificateToPEM(cert)
 	if err != nil {
