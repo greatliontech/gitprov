@@ -23,6 +23,10 @@ jobs:
       - run: go vet ./...
       - run: test -z "$(gofmt -l . | tee /dev/stderr)"
       - run: go test -race -count=1 ./...
+      # The spec corpus against the tree: every requirement's witnesses
+      # executed, the declared gaps the only excuse for a red.
+      - name: Spec verification
+        run: go run github.com/greatliontech/stipulator/cmd/stipulator@v0.64.11 check
       # The suite pins rapid's seed for oracle determinism, which fixes
       # the property tests to one trajectory. This leg restores the
       # accumulating-coverage role: a per-run seed (the run id, so any
