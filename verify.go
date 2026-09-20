@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"time"
 
@@ -216,6 +217,33 @@ func offlineRekorVerify(ctx context.Context, sig []byte, leaf *x509.Certificate,
 		return nil, err
 	}
 	if err := cosign.VerifyTLogEntryOffline(ctx, e, nil, tr.root); err != nil {
+		return nil, err
+	}
+	// cosign's offline verification walks the proof to the root hash
+	// the entry states and verifies the signed entry timestamp; the
+	// checkpoint — the log's signature over that root and the tree
+	// size — is judged here, so the proof ends at a tree state the
+	// log signed.
+	proof := e.Verification.InclusionProof
+	rootHash, err := hex.DecodeString(*proof.RootHash)
+	if err != nil {
+		return nil, fmt.Errorf("gitprov: inclusion proof root hash: %w", err)
+	}
+	var checkpoint string
+	if proof.Checkpoint != nil {
+		checkpoint = *proof.Checkpoint
+	}
+	// The root keys the log by the lowercase hex of its identifier, as
+	// cosign spells the entry's before its own lookup.
+	logID, err := hex.DecodeString(*e.LogID)
+	if err != nil {
+		return nil, fmt.Errorf("gitprov: entry log identifier: %w", err)
+	}
+	log, ok := tr.root.RekorLogs()[hex.EncodeToString(logID)]
+	if !ok {
+		return nil, errors.New("gitprov: the entry names a log the root does not")
+	}
+	if err := judgeCheckpoint(checkpoint, rootHash, *proof.TreeSize, log); err != nil {
 		return nil, err
 	}
 	return e, nil

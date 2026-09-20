@@ -680,6 +680,9 @@ func TestProductionImportsCarryNoNetworkCapability(t *testing.T) {
 				"github.com/sigstore/gitsign/pkg/git",
 				"github.com/sigstore/protobuf-specs/gen/pb-go/rekor/v1",
 				"github.com/sigstore/rekor/pkg/generated/models",
+				"github.com/sigstore/rekor-tiles/v2/pkg/note",
+				"github.com/transparency-dev/formats/log",
+				"golang.org/x/mod/sumdb/note",
 				"github.com/sigstore/rekor/pkg/types",
 				"github.com/sigstore/rekor/pkg/types/hashedrekord/v0.0.1",
 				"github.com/sigstore/sigstore-go/pkg/bundle",
@@ -694,8 +697,8 @@ func TestProductionImportsCarryNoNetworkCapability(t *testing.T) {
 			RestrictStandardLibrary: true,
 			StandardLibrary: []string{
 				"bytes", "context", "crypto", "crypto/sha256", "crypto/x509",
-				"encoding/asn1", "encoding/base64", "encoding/hex", "encoding/json", "encoding/pem",
-				"errors", "fmt", "os", "regexp", "strings", "time",
+				"encoding/asn1", "encoding/base64", "encoding/binary", "encoding/hex", "encoding/json", "encoding/pem",
+				"errors", "fmt", "net/url", "os", "regexp", "strconv", "strings", "time",
 			},
 		},
 	})

@@ -337,6 +337,15 @@ func verifyBundle(b SigstoreBundle, alg string, sum []byte, tr *TrustedRoot) (le
 	if signedTime.Before(log.ValidityPeriodStart) || (!log.ValidityPeriodEnd.IsZero() && signedTime.After(log.ValidityPeriodEnd)) {
 		return nil, time.Time{}, 0, fmt.Errorf("gitprov: bundle entry's log key is not valid at the signed time %s", signedTime.UTC().Format(time.RFC3339))
 	}
+	// The verifier judges a v1 checkpoint's signature and root and a
+	// v2 checkpoint's signature and origin; the one rule — signed by
+	// the pinned log's key in its name, a v2 origin the base URL's
+	// host, the proof's root, the proof's tree size — is applied here
+	// to either, as to a git object's.
+	proof := entries[0].TransparencyLogEntry().GetInclusionProof()
+	if err := judgeCheckpoint(proof.GetCheckpoint().GetEnvelope(), proof.GetRootHash(), proof.GetTreeSize(), log); err != nil {
+		return nil, time.Time{}, 0, err
+	}
 	return leaf, signedTime, entries[0].LogIndex(), nil
 }
 

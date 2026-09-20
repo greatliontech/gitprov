@@ -11,9 +11,10 @@ bytes: a carrier cosign itself wrote, proving the terms against
 cosign's output rather than its constants; and a Rekor v2 entry — an
 inclusion proof under a checkpoint whose origin is the log's host,
 no signed entry timestamp, the time a timestamp's — since the
-virtual log's checkpoint carries a tree-identifier suffix and so
-takes the v1 branch, leaving the v2 checkpoint-origin rule delegated
-to the client library and unexercised here.
+synthetic log's checkpoint carries a tree-identifier suffix and so
+takes the client library's v1 branch; the checkpoint judgement here
+covers a v2-shaped checkpoint on its own, a real v2 entry through
+the whole path waits on the capture.
 
 The client library's release pinned beside this record narrows the
 Rekor v2 entry kinds it reads to hashedrekord, where its predecessor

@@ -101,13 +101,19 @@ transparency, the proof MUST be decoded from the signature's embedded
 unsigned attribute, bound to this signature — the reconstructed
 log-entry body commits to the signed message digest, the signature
 bytes, and the leaf certificate — its signed entry timestamp verified
-against the pinned root's log keys, and its inclusion proof walked to
-the root hash the entry states; the checkpoint the entry carries is
-not judged, so the signed entry timestamp is what binds the entry to
-the log — deliberately unlike an image bundle's entry, whose
-checkpoint its verifier judges (REQ-image-offline-verification): the
-git path runs cosign's offline entry verification, the bundle path
-sigstore-go's bundle verifier. A signature carrying no embedded proof
+against the pinned root's log keys, its inclusion proof walked to
+the root hash the entry states, and its checkpoint judged by the
+pinned log the entry's log identifier selects: a signed note in the
+log's name — a Rekor v1 checkpoint's origin is that name and a tree
+identifier, a Rekor v2 checkpoint's origin the host of the pinned
+log's base URL, so a root naming that log without one admits no v2
+entry — signed by the log's key under either generation's key-hint
+convention, other signers on the note passed over, its root hash
+the proof's and its size the proof's tree size. The signed entry
+timestamp is the log's promise to include the entry, the checkpoint
+its witness that it did under a tree state it signed; an entry
+carrying no checkpoint, or one another key signed or naming another
+origin, root or size, fails. A signature carrying no embedded proof
 is unverifiable and fails. Whether
 transparency is required is the caller's policy, stated per call;
 without it, verification is certificate-only and the verified identity
@@ -205,10 +211,9 @@ against the root's certificate-transparency log keys. The
 transparency entry verifies against the root's log keys, the key
 selected by the entry's log identifier and valid at the signed time
 as the root states its validity: for a bundle, the inclusion proof
-under its checkpoint — a Rekor v1 checkpoint carrying its own origin,
-a Rekor v2 checkpoint's origin being the host of the pinned log's
-base URL, so a root naming that log without one admits no v2 entry —
-and, where carried, the signed entry timestamp; for a simple-signing
+under its checkpoint, the checkpoint judged as
+REQ-verify-embedded-rekor judges a git object's, and, where carried,
+the signed entry timestamp; for a simple-signing
 envelope, the signed entry timestamp over an entry body reconstructed
 from the payload digest, the signature bytes, and the leaf, as
 REQ-verify-embedded-rekor binds a git object's proof. Every RFC 3161

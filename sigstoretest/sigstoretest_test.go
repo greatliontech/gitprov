@@ -1,6 +1,7 @@
 package sigstoretest_test
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/ecdsa"
@@ -17,6 +18,7 @@ import (
 	"github.com/greatliontech/gitprov"
 	"github.com/greatliontech/gitprov/sigstoretest"
 	protobundle "github.com/sigstore/protobuf-specs/gen/pb-go/bundle/v1"
+	"github.com/sigstore/rekor/pkg/util"
 	"github.com/sigstore/sigstore-go/pkg/tlog"
 	"github.com/sigstore/sigstore/pkg/signature"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -179,6 +181,22 @@ func TestLogEntryVerifies(t *testing.T) {
 	}
 	if err := tlog.VerifySET(entry, logs); err != nil {
 		t.Fatalf("signed entry timestamp: %v", err)
+	}
+	// The checkpoint is the log's, over the proof's root and size.
+	var cp util.SignedCheckpoint
+	if err := cp.UnmarshalText([]byte(tle.InclusionProof.Checkpoint.Envelope)); err != nil {
+		t.Fatal(err)
+	}
+	if !cp.SignedNote.Verify(verifier) || !bytes.Equal(cp.Hash, tle.InclusionProof.RootHash) || cp.Size != uint64(tle.InclusionProof.TreeSize) {
+		t.Fatalf("the checkpoint is not the log's over the proof: %+v", cp.Checkpoint)
+	}
+	// Another log's checkpoint over the same tree is not this log's.
+	foreign := s.LogEntryWith(t, leaf, hashedRekord(t, leaf, key, []byte("signed bytes")), time.Time{}, sigstoretest.EntryOptions{CheckpointBy: sigstoretest.New(t)})
+	if err := cp.UnmarshalText([]byte(foreign.InclusionProof.Checkpoint.Envelope)); err != nil {
+		t.Fatal(err)
+	}
+	if cp.SignedNote.Verify(verifier) {
+		t.Fatal("a checkpoint another log signed verified by this log's key")
 	}
 }
 

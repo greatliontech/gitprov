@@ -40,7 +40,7 @@ func TestVerifyImageBundle(t *testing.T) {
 	if vi.Subject != imageIdentity || vi.Issuer != imageIssuer || vi.Digest != imageDigest || vi.TrustedRootDigest != tr.Digest() {
 		t.Fatalf("verified identity = %+v", vi)
 	}
-	if vi.RekorIntegratedTime != at.Unix() || vi.RekorLogIndex != 0 {
+	if vi.RekorIntegratedTime != at.Unix() || vi.RekorLogIndex != 1 {
 		t.Fatalf("signed time %d (want %d), log index %d", vi.RekorIntegratedTime, at.Unix(), vi.RekorLogIndex)
 	}
 	if !strings.HasPrefix(vi.CertFingerprint, "sha256:") {
@@ -49,6 +49,26 @@ func TestVerifyImageBundle(t *testing.T) {
 	// The pointer form is the same carrier.
 	if _, err := gitprov.VerifyImage(context.Background(), imageDigest, &b, imagePolicy(), tr); err != nil {
 		t.Fatalf("pointer carrier: %v", err)
+	}
+}
+
+// A bundle's entry is judged under its checkpoint: one another log's
+// key signed, over the very same tree, fails, the entry's log being
+// the pinned one (REQ-image-offline-verification).
+func TestVerifyImageCheckpoint(t *testing.T) {
+	s := sigstoretest.New(t)
+	b := s.Bundle(t, imageDigest, imageIdentity, imageIssuer, sigstoretest.BundleOptions{CheckpointBy: sigstoretest.New(t)})
+	_, err := gitprov.VerifyImage(context.Background(), imageDigest, b, imagePolicy(), s.TrustedRoot())
+	if err == nil || !strings.Contains(err.Error(), "checkpoint") {
+		t.Fatalf("a checkpoint another log signed: %v", err)
+	}
+	// One the log signed over another tree state names a size the
+	// proof does not: the verifier's own checks pass it, the rule here
+	// does not.
+	b = s.Bundle(t, imageDigest, imageIdentity, imageIssuer, sigstoretest.BundleOptions{CheckpointSize: 3})
+	_, err = gitprov.VerifyImage(context.Background(), imageDigest, b, imagePolicy(), s.TrustedRoot())
+	if err == nil || !strings.Contains(err.Error(), "names a tree of 3, the inclusion proof 2") {
+		t.Fatalf("a checkpoint over another size: %v", err)
 	}
 }
 
