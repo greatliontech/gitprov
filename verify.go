@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"time"
 
 	"github.com/github/smimesign/ietf-cms/protocol"
 	"github.com/sigstore/cosign/v3/pkg/cosign"
@@ -22,8 +23,9 @@ type VerifiedIdentity struct {
 	Issuer              string // the cert OIDC issuer
 	CertFingerprint     string // "sha256:<hex>" of the leaf cert DER
 	RekorLogIndex       int64  // transparency not required ⇒ 0; with it, a genuine entry MAY still be index 0 (Rekor logIndex minimum is 0) — not an unset sentinel
-	RekorIntegratedTime int64  // 0 iff transparency was not required (a real entry's integratedTime is wall-clock seconds, never the 1970 epoch — this IS a reliable unset signal)
+	RekorIntegratedTime int64  // 0 iff transparency was not required (a real entry's integratedTime is wall-clock seconds, never the 1970 epoch — this IS a reliable unset signal); for an image, the signed time the leaf was judged at
 	TrustedRootDigest   string // the pinned-root digest verified against (TrustedRoot.Digest)
+	Digest              string // for an image, the "<algorithm>:<hex>" digest verified; empty for a git object
 }
 
 // Verify verifies a git object's provenance against the policy and the
@@ -36,9 +38,11 @@ type VerifiedIdentity struct {
 // verified against the pinned root's log keys
 // (REQ-verify-embedded-rekor) — a signature with no embedded proof
 // (gitsign's default online mode) is unverifiable and fails, with no
-// network recovery; and the certificate identity must match policy on
-// both axes (REQ-verify-identity-match). Every failure returns an error
-// and no VerifiedIdentity (REQ-verify-fail-closed).
+// network recovery — and the leaf is then judged at the entry's
+// integrated time, its chain and its signed certificate timestamp
+// (REQ-verify-signed-time); and the certificate identity must match
+// policy on both axes (REQ-verify-identity-match). Every failure
+// returns an error and no VerifiedIdentity (REQ-verify-fail-closed).
 func Verify(ctx context.Context, obj Object, id Identity, tr *TrustedRoot, requireTransparency bool) (*VerifiedIdentity, error) {
 	if err := obj.validate(); err != nil {
 		return nil, err
@@ -68,6 +72,13 @@ func Verify(ctx context.Context, obj Object, id Identity, tr *TrustedRoot, requi
 			return nil, fmt.Errorf("gitprov: rekor inclusion (offline): %w", err)
 		}
 		if err := setRekor(vi, tlog); err != nil {
+			return nil, err
+		}
+		extra, err := cmsCertificates(sig)
+		if err != nil {
+			return nil, err
+		}
+		if err := judgeLeafAt(leaf, extra, time.Unix(vi.RekorIntegratedTime, 0), tr); err != nil {
 			return nil, err
 		}
 	}
@@ -143,6 +154,28 @@ func parseCMS(sig []byte) (protocol.SignerInfo, error) {
 		return protocol.SignerInfo{}, fmt.Errorf("gitprov: no signers in signature")
 	}
 	return sd.SignerInfos[0], nil
+}
+
+// cmsCertificates is the certificate set the CMS signature carries —
+// the leaf and any intermediates the signer attached.
+func cmsCertificates(sig []byte) ([]*x509.Certificate, error) {
+	der := sig
+	if blk, _ := pem.Decode(sig); blk != nil {
+		der = blk.Bytes
+	}
+	ci, err := protocol.ParseContentInfo(der)
+	if err != nil {
+		return nil, fmt.Errorf("gitprov: parse CMS: %w", err)
+	}
+	sd, err := ci.SignedDataContent()
+	if err != nil {
+		return nil, fmt.Errorf("gitprov: CMS signed-data: %w", err)
+	}
+	certs, err := sd.X509Certificates()
+	if err != nil {
+		return nil, fmt.Errorf("gitprov: CMS certificates: %w", err)
+	}
+	return certs, nil
 }
 
 // parseSignerInfo extracts the first CMS SignerInfo's signed-attrs

@@ -66,10 +66,22 @@ func entryFromAttrs(attrs protocol.Attributes) (*models.LogEntryAnon, error) {
 // Merkle inclusion commits to this exact HashedRekord passes. Faithful port
 // of the body-recompute half of gitsign internal/rekor/oid.ToLogEntry.
 func bindHashedRekordBody(ctx context.Context, e *models.LogEntryAnon, message, sig []byte, cert *x509.Certificate) error {
+	body, err := hashedRekordBody(ctx, message, sig, cert)
+	if err != nil {
+		return err
+	}
+	e.Body = base64.StdEncoding.EncodeToString(body)
+	return nil
+}
+
+// hashedRekordBody is the canonical HashedRekord entry body for
+// (message, sig, cert): the shape both a git object's embedded entry
+// and a simple-signing envelope's Rekor bundle must have logged.
+func hashedRekordBody(ctx context.Context, message, sig []byte, cert *x509.Certificate) ([]byte, error) {
 	hash := sha256.Sum256(message)
 	certPEM, err := cryptoutils.MarshalCertificateToPEM(cert)
 	if err != nil {
-		return fmt.Errorf("error marshalling cert: %w", err)
+		return nil, fmt.Errorf("error marshalling cert: %w", err)
 	}
 	re := &hashedrekord_v001.V001Entry{
 		HashedRekordObj: models.HashedrekordV001Schema{
@@ -89,10 +101,9 @@ func bindHashedRekordBody(ctx context.Context, e *models.LogEntryAnon, message, 
 	}
 	body, err := types.CanonicalizeEntry(ctx, re)
 	if err != nil {
-		return fmt.Errorf("error canonicalizing entry: %w", err)
+		return nil, fmt.Errorf("error canonicalizing entry: %w", err)
 	}
-	e.Body = base64.StdEncoding.EncodeToString(body)
-	return nil
+	return body, nil
 }
 
 func unmarshalAttribute(attrs protocol.Attributes, oid asn1.ObjectIdentifier, target any) error {

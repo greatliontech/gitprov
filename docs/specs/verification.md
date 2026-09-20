@@ -84,6 +84,18 @@ ending in the pinned trusted root's Fulcio authorities; an invalid
 chain, an invalid signature, or a signer certificate mismatch each fail
 verification.
 
+**REQ-verify-signed-time** (invariant): With transparency required, the
+leaf MUST be judged at the entry's integrated time, which the signed
+entry timestamp binds to this signature: its chain valid at that time
+and its signed certificate timestamp verified against the pinned root's
+certificate-transparency log keys — never at the time of verification,
+and never at a time the certificate asserts of itself. Without
+transparency required, verification is certificate-only: the chain is
+verified at a time the certificate asserts of itself, which proves
+nothing about when its key was live, and the identity read — no
+signed time exists at which the short-lived leaf could be judged,
+which is what a caller accepts by not requiring transparency.
+
 **REQ-verify-embedded-rekor** (behavior): When the caller requires
 transparency, the proof MUST be decoded from the signature's embedded
 unsigned attribute, bound to this signature — the reconstructed
@@ -135,14 +147,18 @@ library reads — whose content is a DSSE envelope carrying exactly one
 signature over an in-toto v1 Statement, the digest signed in a
 subject's `digest` map under its algorithm, the predicate type
 `https://sigstore.dev/cosign/sign/v1`, and as verification material the
-Fulcio leaf certificate, a transparency-log entry — required: a bundle
-without one is not this carrier — and any RFC 3161 timestamps; the
+Fulcio leaf certificate, exactly one transparency-log entry — a bundle
+without one, or with several, is not this carrier — and any RFC 3161
+timestamps; the
 shape cosign's default `sign` writes, attached to the manifest as an
 OCI referrer whose artifact type is the bundle's media type.
 
 **simple-signing envelope** (term): A payload of media type
-`application/vnd.dev.cosign.simplesigning.v1+json` naming the digest
-signed at `critical.image.docker-manifest-digest`, with the signature
+`application/vnd.dev.cosign.simplesigning.v1+json` — the layer's, which
+the library cannot see; its in-band marker, `critical.type` being
+`cosign container image signature`, is what the library checks —
+naming the digest signed at `critical.image.docker-manifest-digest`,
+with the signature
 over the payload bytes, the Fulcio leaf certificate, and the Rekor
 bundle — the signed entry timestamp with the entry's body, log index,
 log identifier, and integrated time — as cosign's legacy carrier

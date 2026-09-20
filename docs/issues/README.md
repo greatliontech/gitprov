@@ -6,4 +6,4 @@ issue file deleted — git holds history.
 
 | Issue | Summary | Lands |
 |---|---|---|
-| [git-verification-time-and-ct](git-verification-time-and-ct.md) | the git contract names no time at which a leaf is judged (the implementation uses the leaf's own not-before, a vacuous window) and no certificate-transparency check, where the image contract states both | image-signatures plan chunk 2 |
+| [cosign-captured-vectors](cosign-captured-vectors.md) | the image verifier is proven on synthetic fixtures; a carrier cosign wrote and a Rekor v2 entry (the checkpoint-origin rule) wait on real captures | when a cosign-signed image's carriers are captured under testdata with their trusted root |

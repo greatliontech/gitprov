@@ -1,10 +1,12 @@
 # gitprov
 
-Offline provenance verification of git objects: sigstore-keyless
-(gitsign) CMS signatures over raw commit and annotated-tag bytes, Fulcio
-identity extraction and policy matching, and embedded-Rekor transparency
-proofs — all verified against a caller-pinned trusted root, with no
-network access ever.
+Offline provenance verification of git objects and OCI images:
+sigstore-keyless signatures — gitsign's CMS over raw commit and
+annotated-tag bytes, cosign's bundle or simple-signing envelope over a
+manifest digest — Fulcio identity extraction and policy matching, and
+transparency proofs, embedded or carried, with the leaf judged at a
+signed time — all verified against a caller-pinned trusted root, with
+no network access ever.
 
 The contract lives in `docs/specs/verification.md`.
 

@@ -1,10 +1,14 @@
-// Package gitprov verifies the provenance of git objects, fully offline
-// (docs/specs/verification.md): a gitsign (sigstore keyless) CMS
-// signature over the raw commit or annotated-tag bytes, a Fulcio
-// short-lived certificate carrying the signer's OIDC identity matched
-// against caller policy, and — when the caller requires transparency —
-// a Rekor inclusion proof embedded in the signature itself, verified
-// against a caller-pinned trusted root. No service is ever queried.
+// Package gitprov verifies the provenance of git objects and OCI
+// images, fully offline (docs/specs/verification.md): for a git
+// object, a gitsign (sigstore keyless) CMS signature over the raw
+// commit or annotated-tag bytes with — when the caller requires
+// transparency — a Rekor inclusion proof embedded in the signature
+// itself; for an image, a cosign sigstore bundle or simple-signing
+// envelope over the manifest digest with its transparency entry
+// carried (VerifyImage); in both a Fulcio short-lived certificate
+// carrying the signer's OIDC identity matched against caller policy
+// and judged at a signed time, all verified against a caller-pinned
+// trusted root. No service is ever queried.
 //
 // Only signatures made in gitsign's offline Rekor mode
 // (`gitsign.rekorMode=offline`) carry the embedded proof. A signature
@@ -29,8 +33,11 @@
 //     pinned root as trusted material.
 //   - CMS structural access uses the upstream
 //     github.com/github/smimesign/ietf-cms/protocol; sigstore-go
-//     supplies only trusted-root material (its verify API is
-//     Bundle-only and cannot consume CMS).
+//     supplies the trusted-root material and, for images and for the
+//     leaf's judgement at a signed time on both paths, its bundle
+//     verifier and its certificate-timestamp verb (its verify API
+//     cannot consume CMS, so the git path's chain and Rekor binding
+//     stay gitsign's and the port's).
 //
 // Dependency floor: gitsign v0.16.0 — CVE-2026-44310 (empty-cert PKCS7)
 // was fixed in v0.15.0, and v0.16.0 carries the raw-bytes
