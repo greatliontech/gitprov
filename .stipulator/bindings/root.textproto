@@ -4,6 +4,7 @@
 bindings {
   requirement_id: "REQ-root-pinned-bytes"
   content_hash: "6ba7cbe0dd463b1294a5563061991dcd4987969686db5a1a388c30b2012836fc"
+  source_hash: "c87a8827d7b346780a165648aa34016e85ff8fb5d0e6d4ad58b77bf1ceb20dce"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.ParseTrustedRoot"
   role: BINDING_ROLE_IMPLEMENTS
@@ -13,6 +14,7 @@ bindings {
 bindings {
   requirement_id: "REQ-root-pinned-bytes"
   content_hash: "6ba7cbe0dd463b1294a5563061991dcd4987969686db5a1a388c30b2012836fc"
+  source_hash: "c87a8827d7b346780a165648aa34016e85ff8fb5d0e6d4ad58b77bf1ceb20dce"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.TestLoadTrustedRoot"
   role: BINDING_ROLE_TESTS

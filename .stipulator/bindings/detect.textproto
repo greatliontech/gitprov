@@ -4,6 +4,7 @@
 bindings {
   requirement_id: "REQ-detect-embedded"
   content_hash: "992b384a7325ccfc93ed4b71179f5c1edae5b0cf70194489026947b84d6bd706"
+  source_hash: "e674db6508f1620f7e33d119f2a6ed42b3556700195e050fe7d9e7e812c8cde6"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.HasEmbeddedRekor"
   role: BINDING_ROLE_IMPLEMENTS
@@ -13,6 +14,7 @@ bindings {
 bindings {
   requirement_id: "REQ-detect-embedded"
   content_hash: "992b384a7325ccfc93ed4b71179f5c1edae5b0cf70194489026947b84d6bd706"
+  source_hash: "e674db6508f1620f7e33d119f2a6ed42b3556700195e050fe7d9e7e812c8cde6"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.TestHasEmbeddedRekor"
   role: BINDING_ROLE_TESTS
