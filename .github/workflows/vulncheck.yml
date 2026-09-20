@@ -13,9 +13,13 @@ permissions:
 jobs:
   govulncheck:
     runs-on: ubuntu-latest
+    env:
+      GOTOOLCHAIN: local
     steps:
       - uses: actions/checkout@v4
+      # The current release, tracking patches: the standard library's
+      # fixes past the module's floor reach the check as they ship.
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: stable
       - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

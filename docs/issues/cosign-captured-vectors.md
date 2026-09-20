@@ -15,6 +15,14 @@ virtual log's checkpoint carries a tree-identifier suffix and so
 takes the v1 branch, leaving the v2 checkpoint-origin rule delegated
 to the client library and unexercised here.
 
+The client library's release pinned beside this record narrows the
+Rekor v2 entry kinds it reads to hashedrekord, where its predecessor
+read a DSSE entry as well, and requires a v1 entry under a DSSE
+bundle to be a dsse or in-toto kind: which kinds cosign's default
+sign logs, under either log version, is what the captures settle,
+and a carrier the library refuses for its entry kind is a finding
+against the contract's bundle term, not against the capture.
+
 The capture, as the gitsign vectors were recorded: a throwaway image
 pushed to a registry, signed with cosign v3 twice — its default
 bundle referrer, and with `--new-bundle-format=false` the legacy
