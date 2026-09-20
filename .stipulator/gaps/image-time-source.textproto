@@ -1,0 +1,8 @@
+# proto-file: proto/stipulator/v1/records.proto
+# proto-message: stipulator.v1.Gap
+
+requirement_id: "REQ-image-time-source"
+reason: "the invariant is witnessed by example tests; a property witness over the carrier and entry grammar is not written"
+content_hash: "7735533aabcb13b0c7db1a6af42268da1c59ab5d91a18c4e9acdcf10d8112e2a"
+source_hash: "8d2b8447143d1eaea51f8bf538914ab5bc6df90e25c4338665b26950dd3b0ace"
+lands { covered: "REQ-image-time-source" }
