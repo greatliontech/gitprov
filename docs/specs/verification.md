@@ -100,9 +100,15 @@ which is what a caller accepts by not requiring transparency.
 transparency, the proof MUST be decoded from the signature's embedded
 unsigned attribute, bound to this signature — the reconstructed
 log-entry body commits to the signed message digest, the signature
-bytes, and the leaf certificate — and its inclusion proof and signed
-entry timestamp verified against the pinned root's log keys, with a
-signature carrying no embedded proof unverifiable and failing. Whether
+bytes, and the leaf certificate — its signed entry timestamp verified
+against the pinned root's log keys, and its inclusion proof walked to
+the root hash the entry states; the checkpoint the entry carries is
+not judged, so the signed entry timestamp is what binds the entry to
+the log — deliberately unlike an image bundle's entry, whose
+checkpoint its verifier judges (REQ-image-offline-verification): the
+git path runs cosign's offline entry verification, the bundle path
+sigstore-go's bundle verifier. A signature carrying no embedded proof
+is unverifiable and fails. Whether
 transparency is required is the caller's policy, stated per call;
 without it, verification is certificate-only and the verified identity
 carries no log entry.

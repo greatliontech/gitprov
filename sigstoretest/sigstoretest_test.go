@@ -2,6 +2,11 @@ package sigstoretest_test
 
 import (
 	"context"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
 	"fmt"
 	"runtime"
 	"strings"
@@ -11,6 +16,10 @@ import (
 
 	"github.com/greatliontech/gitprov"
 	"github.com/greatliontech/gitprov/sigstoretest"
+	protobundle "github.com/sigstore/protobuf-specs/gen/pb-go/bundle/v1"
+	"github.com/sigstore/sigstore-go/pkg/tlog"
+	"github.com/sigstore/sigstore/pkg/signature"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -50,6 +59,20 @@ func record(t *testing.T, build func(*recorder)) string {
 	return r.failed
 }
 
+// A bundle's entry is the log's: its inclusion proof walks the
+// Merkle path every entry of this log has (New).
+func TestBundleEntryCarriesPath(t *testing.T) {
+	s := sigstoretest.New(t)
+	var b protobundle.Bundle
+	if err := protojson.Unmarshal(s.Bundle(t, digest, subject, issuer, sigstoretest.BundleOptions{}).JSON, &b); err != nil {
+		t.Fatal(err)
+	}
+	entries := b.GetVerificationMaterial().GetTlogEntries()
+	if len(entries) != 1 || len(entries[0].GetInclusionProof().GetHashes()) == 0 {
+		t.Fatalf("the bundle's entry walks no Merkle path: %v", entries)
+	}
+}
+
 // Both carriers a sigstore builds verify against its own root, at the
 // edge of the leaf's validity as at its issue.
 func TestCarriersVerify(t *testing.T) {
@@ -83,9 +106,21 @@ func TestBuildersRefuse(t *testing.T) {
 		"envelope past validity": func(r *recorder) {
 			s.Envelope(r, digest, subject, issuer, sigstoretest.EnvelopeOptions{IntegratedAt: time.Now().Add(time.Hour)})
 		},
+		"entry past validity": func(r *recorder) {
+			leaf, key := s.Leaf(r, subject, issuer)
+			s.LogEntry(r, leaf, hashedRekord(r, leaf, key, []byte("late")), time.Now().Add(time.Hour))
+		},
 	} {
 		if failed := record(t, build); !strings.Contains(failed, "outside the leaf's validity") || !strings.Contains(failed, "move the root's window") {
 			t.Errorf("%s: %q", name, failed)
+		}
+	}
+	for name, body := range map[string]string{"not JSON": "{", "no kind": "{}", "no version": `{"kind":"hashedrekord"}`} {
+		if failed := record(t, func(r *recorder) {
+			leaf, _ := s.Leaf(r, subject, issuer)
+			s.LogEntry(r, leaf, []byte(body), time.Time{})
+		}); !strings.Contains(failed, "entry body") {
+			t.Errorf("a body that is not an entry (%s): %q", name, failed)
 		}
 	}
 	if failed := record(t, func(r *recorder) { sigstoretest.Statement(r, "deadbeef", sigstoretest.CosignSignPredicateType) }); !strings.Contains(failed, "is not <algorithm>:<hex>") {
@@ -93,6 +128,57 @@ func TestBuildersRefuse(t *testing.T) {
 	}
 	if failed := record(t, func(r *recorder) { sigstoretest.PEM(r, nil) }); failed == "" {
 		t.Error("a nil certificate rendered")
+	}
+}
+
+// hashedRekord signs message with the leaf's key and returns the
+// HashedRekord body the log records for it.
+func hashedRekord(t testing.TB, leaf *x509.Certificate, key *ecdsa.PrivateKey, message []byte) []byte {
+	t.Helper()
+	h := sha256.Sum256(message)
+	sig, err := ecdsa.SignASN1(rand.Reader, key, h[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := gitprov.HashedRekordBody(context.Background(), message, sig, leaf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+// An entry the log records verifies as a real one does: its
+// inclusion proof walks a Merkle path under the log's checkpoint, its
+// signed entry timestamp is the log's over the entry's coordinates,
+// and its kind is the body's.
+func TestLogEntryVerifies(t *testing.T) {
+	s := sigstoretest.New(t)
+	leaf, key := s.Leaf(t, subject, issuer)
+	tle := s.LogEntry(t, leaf, hashedRekord(t, leaf, key, []byte("signed bytes")), time.Time{})
+	if tle.KindVersion.Kind != "hashedrekord" || tle.KindVersion.Version != "0.0.1" {
+		t.Fatalf("kind = %v", tle.KindVersion)
+	}
+	// The kind is the body's, whatever it names.
+	if other := s.LogEntry(t, leaf, []byte(`{"kind":"dsse","apiVersion":"0.0.2","spec":{}}`), time.Time{}); other.KindVersion.Kind != "dsse" || other.KindVersion.Version != "0.0.2" {
+		t.Fatalf("kind of another body = %v", other.KindVersion)
+	}
+	if len(tle.InclusionProof.Hashes) == 0 {
+		t.Fatal("the inclusion proof walks no Merkle path")
+	}
+	entry, err := tlog.ParseEntry(tle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs := s.RekorLogs(t)
+	verifier, err := signature.LoadVerifier(logs[s.RekorLogID(t)].PublicKey, crypto.SHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tlog.VerifyInclusion(entry, verifier); err != nil {
+		t.Fatalf("inclusion: %v", err)
+	}
+	if err := tlog.VerifySET(entry, logs); err != nil {
+		t.Fatalf("signed entry timestamp: %v", err)
 	}
 }
 

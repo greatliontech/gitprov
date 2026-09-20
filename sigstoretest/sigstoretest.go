@@ -77,10 +77,15 @@ type Sigstore struct {
 // New builds a sigstore whose root pins its own authorities and
 // logs, valid from an hour ago for a day; a leaf it issues is valid
 // from a minute before its issue to ten minutes after (Leaf), so a
-// signed time a fixture states must fall in that window.
+// signed time a fixture states must fall in that window. The Rekor
+// log holds one entry already, so every inclusion proof it issues
+// walks a one-hash Merkle path in a tree of two, the new entry at
+// index 0.
 func New(t testing.TB) *Sigstore {
 	t.Helper()
-	vs, err := ca.NewVirtualSigstore()
+	// The existing entry gives every inclusion proof a Merkle path,
+	// so a verifier's path walk is exercised, not passed over.
+	vs, err := ca.NewVirtualSigstoreWithExistingRekorEntry()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,9 +168,9 @@ func (s *Sigstore) TrustedRoot() *gitprov.TrustedRoot { return s.root }
 // RootJSON is a copy of the root's bytes, as pinned.
 func (s *Sigstore) RootJSON() []byte { return append([]byte(nil), s.rootJSON...) }
 
-// Virtual is the underlying virtual sigstore, for its Rekor log —
-// RekorSignPayload, GetInclusionProof — and its timestamp authority,
-// TimestampResponse. Its own Fulcio is not this sigstore's: a leaf
+// Virtual is the underlying virtual sigstore, for its timestamp
+// authority — TimestampResponse — and for what LogEntry does not
+// build. Its own Fulcio is not this sigstore's: a leaf
 // from GenerateLeafCert carries no certificate timestamp and chains
 // to no authority the pinned root names, so such a leaf never
 // verifies here.
@@ -337,6 +342,89 @@ func signedTimeFor(t testing.TB, at time.Time, leaf *x509.Certificate) time.Time
 	return at
 }
 
+// LogEntry is a Rekor v1 entry over body — any entry body naming its
+// kind and version — as the virtual log signs it: its inclusion
+// proof under the log's checkpoint, its signed entry timestamp, its
+// kind and version read from the body; integrated at, now when zero; the time must fall in
+// leaf's window (New), the builder failing the test otherwise. The
+// entry's index is 0, the Merkle position the log's proof places
+// every entry at (New), so a consumer reading the index back reads
+// the zero value; Envelope's Rekor bundle names another for exactly
+// that reason. A consumer embedding an entry in its own carrier (a
+// git object's unsigned attribute) builds it here so the entry is
+// what this log signed.
+func (s *Sigstore) LogEntry(t testing.TB, leaf *x509.Certificate, body []byte, at time.Time) *protorekor.TransparencyLogEntry {
+	t.Helper()
+	at = signedTimeFor(t, at, leaf)
+	var kind struct{ Kind, APIVersion string }
+	if err := json.Unmarshal(body, &kind); err != nil {
+		t.Fatalf("sigstoretest: entry body: %v", err)
+	}
+	if kind.Kind == "" || kind.APIVersion == "" {
+		t.Fatalf("sigstoretest: entry body names no kind and version: %s", body)
+	}
+	proof, err := s.vs.GetInclusionProof(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The virtual log hashes the entry as the tree's first leaf, its
+	// existing entry the sibling, whatever index the proof reports;
+	// the entry names index 0 so a verifier's walk reproduces the
+	// checkpoint's root, as the virtual sigstore's own entry
+	// generator names it.
+	const logIndex = 0
+	set, _ := s.signEntry(t, body, at, logIndex)
+	hashes := make([][]byte, len(proof.Hashes))
+	for i, h := range proof.Hashes {
+		if hashes[i], err = hex.DecodeString(h); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rootHash, err := hex.DecodeString(*proof.RootHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &protorekor.TransparencyLogEntry{
+		LogIndex:         logIndex,
+		LogId:            &protocommon.LogId{KeyId: s.rekorKeyID(t)},
+		KindVersion:      &protorekor.KindVersion{Kind: kind.Kind, Version: kind.APIVersion},
+		IntegratedTime:   at.Unix(),
+		InclusionPromise: &protorekor.InclusionPromise{SignedEntryTimestamp: set},
+		InclusionProof: &protorekor.InclusionProof{
+			LogIndex:   logIndex,
+			RootHash:   rootHash,
+			TreeSize:   *proof.TreeSize,
+			Hashes:     hashes,
+			Checkpoint: &protorekor.Checkpoint{Envelope: *proof.Checkpoint},
+		},
+		CanonicalizedBody: body,
+	}
+}
+
+// signEntry is the log's signed entry timestamp over an entry's
+// coordinates — the body, the integrated time, the index, the log —
+// and the payload it covers.
+func (s *Sigstore) signEntry(t testing.TB, body []byte, at time.Time, index int64) ([]byte, tlog.RekorPayload) {
+	t.Helper()
+	payload := tlog.RekorPayload{Body: base64.StdEncoding.EncodeToString(body), IntegratedTime: at.Unix(), LogIndex: index, LogID: s.RekorLogID(t)}
+	set, err := s.vs.RekorSignPayload(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return set, payload
+}
+
+// rekorKeyID is the virtual log's identifier as bytes, as an entry
+// carries it.
+func (s *Sigstore) rekorKeyID(t testing.TB) []byte {
+	t.Helper()
+	id, err := hex.DecodeString(s.RekorLogID(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 // CosignSignPredicateType is the predicate type cosign's sign writes.
 const CosignSignPredicateType = "https://sigstore.dev/cosign/sign/v1"
 
@@ -406,24 +494,13 @@ func (s *Sigstore) Bundle(t testing.TB, digest, subject, issuer string, o Bundle
 		pb.MediaType = o.MediaType
 	}
 	if !o.NoEntry {
-		entry, err := s.vs.GenerateTlogEntry(leaf, env, sig, at.Unix(), true)
+		// The virtual sigstore canonicalizes the DSSE entry body; the
+		// entry the bundle carries is the log's over that body.
+		entry, err := s.vs.GenerateTlogEntry(leaf, env, sig, at.Unix(), false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		tle := entry.TransparencyLogEntry()
-		// The projection names no kind and carries no signed entry
-		// timestamp; the log signs one over the entry as it records
-		// it, and a bundle names it as the promise.
-		var kind struct{ Kind, APIVersion string }
-		if err := json.Unmarshal(tle.CanonicalizedBody, &kind); err != nil {
-			t.Fatal(err)
-		}
-		tle.KindVersion = &protorekor.KindVersion{Kind: kind.Kind, Version: kind.APIVersion}
-		set, err := s.vs.RekorSignPayload(tlog.RekorPayload{Body: base64.StdEncoding.EncodeToString(tle.CanonicalizedBody), IntegratedTime: at.Unix(), LogIndex: 0, LogID: s.RekorLogID(t)})
-		if err != nil {
-			t.Fatal(err)
-		}
-		tle.InclusionPromise = &protorekor.InclusionPromise{SignedEntryTimestamp: set}
+		tle := s.LogEntry(t, leaf, entry.TransparencyLogEntry().CanonicalizedBody, at)
 		if o.NoPromise {
 			tle.InclusionPromise = nil
 		}
@@ -550,11 +627,7 @@ func (s *Sigstore) Envelope(t testing.TB, digest, subject, issuer string, o Enve
 			t.Fatal(err)
 		}
 		at := signedTimeFor(t, o.IntegratedAt, leaf)
-		rp := tlog.RekorPayload{Body: base64.StdEncoding.EncodeToString(body), IntegratedTime: at.Unix(), LogIndex: 7, LogID: s.RekorLogID(t)}
-		set, err := s.vs.RekorSignPayload(rp)
-		if err != nil {
-			t.Fatal(err)
-		}
+		set, rp := s.signEntry(t, body, at, 7)
 		rb, err := json.Marshal(cbundle.RekorBundle{SignedEntryTimestamp: set, Payload: cbundle.RekorPayload(rp)})
 		if err != nil {
 			t.Fatal(err)
