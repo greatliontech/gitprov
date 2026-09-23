@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto"
 	"encoding/base64"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -75,25 +76,30 @@ func TestVerifyPinnedOpenPGPShapes(t *testing.T) {
 		}
 	})
 	for _, tt := range []struct {
-		name string
-		key  *sigstoretest.OpenPGPKey
-		keys []gitprov.PinnedKey
-		o    sigstoretest.OpenPGPOptions
-		want string
+		name     string
+		key      *sigstoretest.OpenPGPKey
+		keys     []gitprov.PinnedKey
+		o        sigstoretest.OpenPGPOptions
+		want     string
+		unpinned bool // the failure is ErrUnpinnedKey: the pinned keys do not vouch
 	}{
-		{"signed by an unpinned key", other, pinned, sigstoretest.OpenPGPOptions{}, "unpinned key"},
-		{"a text-mode signature", key, pinned, sigstoretest.OpenPGPOptions{Text: true}, "not a binary-mode one"},
-		{"a subkey's signature under another key", sub, pinned, sigstoretest.OpenPGPOptions{}, "unpinned key"},
-		{"a critical notation", key, pinned, sigstoretest.OpenPGPOptions{Critical: true}, "critical notation"},
-		{"bytes after the signature packet", key, pinned, sigstoretest.OpenPGPOptions{Trailing: []byte("JUNKJUNKJUNK")}, "signature packet"},
-		{"a second signature packet", key, pinned, sigstoretest.OpenPGPOptions{Second: other}, "holds 2 packets"},
-		{"an unreadable packet before the signature", key, pinned, sigstoretest.OpenPGPOptions{UnreadableBefore: true}, "signature packet"},
-		{"an unreadable packet after the signature", key, pinned, sigstoretest.OpenPGPOptions{UnreadableAfter: true}, "signature packet"},
-		{"an unreadable certification-typed packet after the signature", key, pinned, sigstoretest.OpenPGPOptions{UnreadableCertificationAfter: true}, "signature packet"},
+		{"signed by an unpinned key", other, pinned, sigstoretest.OpenPGPOptions{}, "unpinned key", true},
+		{"a text-mode signature", key, pinned, sigstoretest.OpenPGPOptions{Text: true}, "not a binary-mode one", false},
+		{"a subkey's signature under another key", sub, pinned, sigstoretest.OpenPGPOptions{}, "unpinned key", true},
+		{"a critical notation", key, pinned, sigstoretest.OpenPGPOptions{Critical: true}, "critical notation", false},
+		{"bytes after the signature packet", key, pinned, sigstoretest.OpenPGPOptions{Trailing: []byte("JUNKJUNKJUNK")}, "signature packet", false},
+		{"a second signature packet", key, pinned, sigstoretest.OpenPGPOptions{Second: other}, "holds 2 packets", false},
+		{"an unreadable packet before the signature", key, pinned, sigstoretest.OpenPGPOptions{UnreadableBefore: true}, "signature packet", false},
+		{"an unreadable packet after the signature", key, pinned, sigstoretest.OpenPGPOptions{UnreadableAfter: true}, "signature packet", false},
+		{"an unreadable certification-typed packet after the signature", key, pinned, sigstoretest.OpenPGPOptions{UnreadableCertificationAfter: true}, "signature packet", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := gitprov.VerifyPinned(tagOf(t, tt.key, tt.o), tt.keys); err == nil || !strings.Contains(err.Error(), tt.want) {
+			_, err := gitprov.VerifyPinned(tagOf(t, tt.key, tt.o), tt.keys)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("VerifyPinned = %v, want %q", err, tt.want)
+			}
+			if errors.Is(err, gitprov.ErrUnpinnedKey) != tt.unpinned {
+				t.Fatalf("VerifyPinned = %v; ErrUnpinnedKey = %v, want %v", err, !tt.unpinned, tt.unpinned)
 			}
 		})
 	}
@@ -119,10 +125,10 @@ func TestVerifyPinnedOpenPGPShapes(t *testing.T) {
 		// The refusals the rule makes, from a signer judging nothing:
 		// a signature claiming a time before the key's creation, one
 		// claiming a time past its expiry.
-		if _, err := gitprov.VerifyPinned(tagOf(t, old, sigstoretest.OpenPGPOptions{SignedAt: now.Add(-4 * time.Hour), Forced: true}), pinnedOpenPGP(t, old.Public(t))); err == nil || !strings.Contains(err.Error(), "not yet created") {
+		if _, err := gitprov.VerifyPinned(tagOf(t, old, sigstoretest.OpenPGPOptions{SignedAt: now.Add(-4 * time.Hour), Forced: true}), pinnedOpenPGP(t, old.Public(t))); err == nil || !strings.Contains(err.Error(), "not yet created") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(signed before the key's creation) = %v, want refusal", err)
 		}
-		if _, err := gitprov.VerifyPinned(tagOf(t, expiring, sigstoretest.OpenPGPOptions{Forced: true}), epinned); err == nil || !strings.Contains(err.Error(), "key was expired") {
+		if _, err := gitprov.VerifyPinned(tagOf(t, expiring, sigstoretest.OpenPGPOptions{Forced: true}), epinned); err == nil || !strings.Contains(err.Error(), "key was expired") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(signed after the key's expiry) = %v, want expired", err)
 		}
 		// The subkey likewise: its own expiry, its binding's own
@@ -134,19 +140,19 @@ func TestVerifyPinnedOpenPGPShapes(t *testing.T) {
 		if _, err := gitprov.VerifyPinned(tagOf(t, subExpiring, sigstoretest.OpenPGPOptions{SignedAt: now.Add(-2*time.Hour + 10*time.Minute)}), sePinned); err != nil {
 			t.Fatalf("VerifyPinned(subkey signed within its validity) = %v, want nil", err)
 		}
-		if _, err := gitprov.VerifyPinned(tagOf(t, subExpiring, sigstoretest.OpenPGPOptions{ForcedSubkey: true}), sePinned); err == nil || !strings.Contains(err.Error(), "subkey was expired") {
+		if _, err := gitprov.VerifyPinned(tagOf(t, subExpiring, sigstoretest.OpenPGPOptions{ForcedSubkey: true}), sePinned); err == nil || !strings.Contains(err.Error(), "subkey was expired") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(subkey signed after its expiry) = %v, want subkey expired", err)
 		}
-		if _, err := gitprov.VerifyPinned(tagOf(t, subExpiring, sigstoretest.OpenPGPOptions{ForcedSubkey: true, SignedAt: now.Add(-150 * time.Minute)}), sePinned); err == nil || !strings.Contains(err.Error(), "subkey was not yet created") {
+		if _, err := gitprov.VerifyPinned(tagOf(t, subExpiring, sigstoretest.OpenPGPOptions{ForcedSubkey: true, SignedAt: now.Add(-150 * time.Minute)}), sePinned); err == nil || !strings.Contains(err.Error(), "subkey was not yet created") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(subkey signed before its creation) = %v, want refusal", err)
 		}
 		bindingLapsed := sigstoretest.NewOpenPGPKeyWith(t, sigstoretest.OpenPGPKeyOptions{Created: now.Add(-3 * time.Hour)}).
 			WithSigningSubkeyWith(t, sigstoretest.SubkeyOptions{Created: now.Add(-2 * time.Hour), BindingLifetime: 30 * time.Minute})
-		if _, err := gitprov.VerifyPinned(tagOf(t, bindingLapsed, sigstoretest.OpenPGPOptions{ForcedSubkey: true}), pinnedOpenPGP(t, bindingLapsed.Public(t))); err == nil || !strings.Contains(err.Error(), "binding had lapsed") {
+		if _, err := gitprov.VerifyPinned(tagOf(t, bindingLapsed, sigstoretest.OpenPGPOptions{ForcedSubkey: true}), pinnedOpenPGP(t, bindingLapsed.Public(t))); err == nil || !strings.Contains(err.Error(), "binding had lapsed") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(subkey signed after its binding lapsed) = %v, want refusal", err)
 		}
 		selfLapsed := sigstoretest.NewOpenPGPKeyWith(t, sigstoretest.OpenPGPKeyOptions{Created: now.Add(-3 * time.Hour)}).ReSignForA(t, now.Add(-2*time.Hour), 30*time.Minute)
-		if _, err := gitprov.VerifyPinned(tagOf(t, selfLapsed, sigstoretest.OpenPGPOptions{Forced: true}), pinnedOpenPGP(t, selfLapsed.Public(t))); err == nil || !strings.Contains(err.Error(), "self-signature had lapsed") {
+		if _, err := gitprov.VerifyPinned(tagOf(t, selfLapsed, sigstoretest.OpenPGPOptions{Forced: true}), pinnedOpenPGP(t, selfLapsed.Public(t))); err == nil || !strings.Contains(err.Error(), "self-signature had lapsed") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(signed after the self-signature lapsed) = %v, want refusal", err)
 		}
 		subRevoked := sigstoretest.NewOpenPGPKeyWith(t, sigstoretest.OpenPGPKeyOptions{Created: now.Add(-3 * time.Hour)}).WithSigningSubkeyWith(t, sigstoretest.SubkeyOptions{Created: now.Add(-3 * time.Hour)})
@@ -156,32 +162,39 @@ func TestVerifyPinnedOpenPGPShapes(t *testing.T) {
 		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: subBefore}, srPinned); err != nil {
 			t.Fatalf("VerifyPinned(subkey signed before its revocation) = %v, want nil", err)
 		}
-		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: subAfter}, srPinned); err == nil || !strings.Contains(err.Error(), "subkey was revoked") {
+		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: subAfter}, srPinned); err == nil || !strings.Contains(err.Error(), "subkey was revoked") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(subkey signed after its revocation) = %v, want subkey revoked", err)
 		}
 		subCompromised := sigstoretest.NewOpenPGPKeyWith(t, sigstoretest.OpenPGPKeyOptions{Created: now.Add(-3 * time.Hour)}).WithSigningSubkeyWith(t, sigstoretest.SubkeyOptions{Created: now.Add(-3 * time.Hour)})
 		subEarly := subCompromised.SignedTag(t, tagPayload, sigstoretest.OpenPGPOptions{SignedAt: now.Add(-2 * time.Hour)})
-		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: subEarly}, pinnedOpenPGP(t, subCompromised.RevokeSubkeyCompromised(t, now.Add(-time.Hour)).Public(t))); err == nil || !strings.Contains(err.Error(), "subkey was revoked") {
+		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: subEarly}, pinnedOpenPGP(t, subCompromised.RevokeSubkeyCompromised(t, now.Add(-time.Hour)).Public(t))); err == nil || !strings.Contains(err.Error(), "subkey was revoked") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(subkey signed before its compromise revocation) = %v, want subkey revoked", err)
 		}
 		// The primary identity revoked: refused whenever the signature
 		// claims, the revocation stating no reason.
 		idRevoked := sigstoretest.NewOpenPGPKeyWith(t, sigstoretest.OpenPGPKeyOptions{Created: now.Add(-3 * time.Hour)})
 		idEarly := idRevoked.SignedTag(t, tagPayload, sigstoretest.OpenPGPOptions{SignedAt: now.Add(-2 * time.Hour)})
-		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: idEarly}, pinnedOpenPGP(t, idRevoked.RevokeIdentity(t, now.Add(-time.Hour)).Public(t))); err == nil || !strings.Contains(err.Error(), "identity was revoked") {
+		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: idEarly}, pinnedOpenPGP(t, idRevoked.RevokeIdentity(t, now.Add(-time.Hour)).Public(t))); err == nil || !strings.Contains(err.Error(), "identity was revoked") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(signed before the identity's revocation) = %v, want identity revoked", err)
 		}
 		// A key whose self-signature states no key flags signs nothing,
 		// and the refusal says so rather than naming an unpinned key.
 		flagless := sigstoretest.NewOpenPGPKeyWith(t, sigstoretest.OpenPGPKeyOptions{Created: now.Add(-3 * time.Hour)})
 		flaglessSig := flagless.SignedTag(t, tagPayload, sigstoretest.OpenPGPOptions{SignedAt: now.Add(-2 * time.Hour)})
-		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: flaglessSig}, pinnedOpenPGP(t, flagless.ReSignWithoutFlags(t, now.Add(-time.Hour)).Public(t))); err == nil || !strings.Contains(err.Error(), "key flags do not admit signing") {
+		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: flaglessSig}, pinnedOpenPGP(t, flagless.ReSignWithoutFlags(t, now.Add(-time.Hour)).Public(t))); err == nil || !strings.Contains(err.Error(), "key flags do not admit signing") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(a key without key flags) = %v, want the flags named", err)
+		}
+		// A self-signature carrying a critical notation no verifier
+		// knows: the key's own statement, so the key does not vouch.
+		notated := sigstoretest.NewOpenPGPKeyWith(t, sigstoretest.OpenPGPKeyOptions{Created: now.Add(-3 * time.Hour)})
+		notatedSig := notated.SignedTag(t, tagPayload, sigstoretest.OpenPGPOptions{SignedAt: now.Add(-2 * time.Hour)})
+		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: notatedSig}, pinnedOpenPGP(t, notated.ReSignWithCriticalNotation(t, now.Add(-time.Hour)).Public(t))); err == nil || !strings.Contains(err.Error(), "critical notation") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
+			t.Fatalf("VerifyPinned(a self-signature with a critical notation) = %v, want the key not vouching", err)
 		}
 		// A revocation carrying no reason subpacket at all is hard.
 		noReason := sigstoretest.NewOpenPGPKeyWith(t, sigstoretest.OpenPGPKeyOptions{Created: now.Add(-3 * time.Hour)})
 		nrEarly := noReason.SignedTag(t, tagPayload, sigstoretest.OpenPGPOptions{SignedAt: now.Add(-2 * time.Hour)})
-		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: nrEarly}, pinnedOpenPGP(t, noReason.RevokeWithoutReason(t, now.Add(-time.Hour)).Public(t))); err == nil || !strings.Contains(err.Error(), "key was revoked") {
+		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: nrEarly}, pinnedOpenPGP(t, noReason.RevokeWithoutReason(t, now.Add(-time.Hour)).Public(t))); err == nil || !strings.Contains(err.Error(), "key was revoked") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(signed before a revocation without a reason) = %v, want revoked", err)
 		}
 		// A key re-signed after the signature — its expiry extended, a
@@ -203,7 +216,7 @@ func TestVerifyPinnedOpenPGPShapes(t *testing.T) {
 		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: before}, rpinned); err != nil {
 			t.Fatalf("VerifyPinned(signed before the revocation) = %v, want nil", err)
 		}
-		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: after}, rpinned); err == nil || !strings.Contains(err.Error(), "revoked") {
+		if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: after}, rpinned); err == nil || !strings.Contains(err.Error(), "revoked") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 			t.Fatalf("VerifyPinned(signed after the revocation) = %v, want revoked", err)
 		}
 		retired := sigstoretest.NewOpenPGPKeyWith(t, sigstoretest.OpenPGPKeyOptions{Created: now.Add(-3 * time.Hour)})
@@ -221,7 +234,7 @@ func TestVerifyPinnedOpenPGPShapes(t *testing.T) {
 		} {
 			hard := sigstoretest.NewOpenPGPKeyWith(t, sigstoretest.OpenPGPKeyOptions{Created: now.Add(-3 * time.Hour)})
 			early := hard.SignedTag(t, tagPayload, sigstoretest.OpenPGPOptions{SignedAt: now.Add(-2 * time.Hour)})
-			if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: early}, pinnedOpenPGP(t, revoke(hard).Public(t))); err == nil || !strings.Contains(err.Error(), "revoked") {
+			if _, err := gitprov.VerifyPinned(gitprov.Object{Kind: gitprov.Tag, Format: gitprov.SHA1, Raw: early}, pinnedOpenPGP(t, revoke(hard).Public(t))); err == nil || !strings.Contains(err.Error(), "revoked") || !errors.Is(err, gitprov.ErrUnpinnedKey) {
 				t.Fatalf("VerifyPinned(signed before a %s revocation) = %v, want revoked", name, err)
 			}
 		}

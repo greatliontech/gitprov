@@ -305,6 +305,20 @@ func parseSSHKey(line string) (PinnedKey, error) {
 // sshRSAMinimumBits is the RSA modulus size OpenSSH refuses below.
 const sshRSAMinimumBits = 1024
 
+// ErrUnpinnedKey marks a signature the pinned keys do not vouch for
+// (REQ-verify-pinned-key): none of the signature's kind is pinned, the
+// key that signed is not among them, or it is among them but was not
+// fit to sign at the signature's time — its key flags admitting no
+// signing, the key or signing subkey not yet created, expired, revoked
+// or its self-signature or binding lapsed by then, the primary
+// identity revoked, no self-signature at all, or one of the key's own
+// statements carrying a critical notation this verifier does not know.
+// The cryptography may be sound: the keys pinned simply do not cover
+// it. Callers whose own policy tolerates unsigned subjects classify on
+// it: an unpinned signer is a non-acceptance, not proof of tampering,
+// as ErrIdentityMismatch is for a sigstore signature.
+var ErrUnpinnedKey = errors.New("gitprov: the signature is by no pinned key")
+
 // VerifiedKey is the proven outcome of a pinned-key verification: the
 // kind and fingerprint of the pinned key that verified the signature,
 // in place of a Fulcio identity. It carries no signed time, no
@@ -322,9 +336,9 @@ type VerifiedKey struct {
 // is found among the pinned keys of that kind by fingerprint, and the
 // pinned key — never the key the signature carries — verifies the
 // signature over the raw payload bytes (REQ-verify-raw-bytes). Every
-// failure — a sigstore signature (ErrSignatureKind), no pinned key of
-// the signature's kind, a signature by an unpinned key, one that does
-// not verify — returns an error and no VerifiedKey
+// failure — a sigstore signature (ErrSignatureKind), a signature the
+// pinned keys do not vouch for (ErrUnpinnedKey), one that does not
+// verify — returns an error and no VerifiedKey
 // (REQ-verify-fail-closed).
 func VerifyPinned(obj Object, keys []PinnedKey) (*VerifiedKey, error) {
 	if err := obj.validate(); err != nil {
@@ -378,7 +392,7 @@ func verifyOpenPGP(payload, sig []byte, keys []PinnedKey) (*VerifiedKey, error) 
 		}
 	}
 	if len(pinned) == 0 {
-		return nil, errors.New("gitprov: no pinned key of the signature's kind (openpgp)")
+		return nil, fmt.Errorf("%w: no pinned key of the signature's kind (openpgp)", ErrUnpinnedKey)
 	}
 	// The frame passed: the one block here is labelled a signature.
 	body, err := armorBody(sig)
@@ -411,9 +425,9 @@ func verifyOpenPGP(payload, sig []byte, keys []PinnedKey) (*VerifiedKey, error) 
 	candidates := ring.KeysByIdUsage(*pgpSig.IssuerKeyId, packet.KeyFlagSign)
 	if len(candidates) == 0 {
 		if len(ring.KeysById(*pgpSig.IssuerKeyId)) != 0 {
-			return nil, fmt.Errorf("gitprov: OpenPGP signature by the pinned key %016X, whose key flags do not admit signing", *pgpSig.IssuerKeyId)
+			return nil, fmt.Errorf("%w: OpenPGP signature by the pinned key %016X, whose key flags do not admit signing", ErrUnpinnedKey, *pgpSig.IssuerKeyId)
 		}
-		return nil, fmt.Errorf("gitprov: OpenPGP signature by an unpinned key %016X", *pgpSig.IssuerKeyId)
+		return nil, fmt.Errorf("%w: OpenPGP signature by an unpinned key %016X", ErrUnpinnedKey, *pgpSig.IssuerKeyId)
 	}
 	var key *openpgp.Key
 	for i := range candidates {
@@ -433,8 +447,13 @@ func verifyOpenPGP(payload, sig []byte, keys []PinnedKey) (*VerifiedKey, error) 
 	if key == nil {
 		return nil, errors.New("gitprov: OpenPGP signature does not verify against the pinned keys")
 	}
-	if err := openPGPValidAt(key, pgpSig, pgpSig.CreationTime); err != nil {
+	// The signature's own critical notation is the signature's fault,
+	// not the key's: it does not verify.
+	if err := noCriticalNotation(pgpSig); err != nil {
 		return nil, fmt.Errorf("gitprov: OpenPGP signature does not verify against the pinned keys: %w", err)
+	}
+	if err := openPGPValidAt(key, pgpSig.CreationTime); err != nil {
+		return nil, fmt.Errorf("%w: OpenPGP signature by a pinned key not fit to sign at its time: %v", ErrUnpinnedKey, err)
 	}
 	fp := openPGPFingerprint(key.Entity.PrimaryKey)
 	for i := range pinned {
@@ -444,25 +463,27 @@ func verifyOpenPGP(payload, sig []byte, keys []PinnedKey) (*VerifiedKey, error) 
 	}
 	// The keyring holds the pinned keys alone, so the signer is one of
 	// them by construction.
-	return nil, fmt.Errorf("gitprov: OpenPGP signature by an unpinned key %s", fp)
+	return nil, fmt.Errorf("%w: OpenPGP signature by an unpinned key %s", ErrUnpinnedKey, fp)
 }
 
-// openPGPValidAt judges the signature's signing key at the time: the
+// openPGPValidAt judges a signature's signing key at the time: the
 // key created by then and not expired at it by its latest
 // self-signature — the primary's for a primary key, the binding's and
 // the primary's for a subkey — those self-signatures' own lifetimes
 // not lapsed by then, neither the key, the primary key, the signing
 // subkey nor the primary identity revoked at it, and no critical
-// notation this verifier does not know on the signature, the
-// self-signature, the binding or its back-signature (RFC 9580: a
-// critical subpacket unknown to the verifier fails the signature).
-func openPGPValidAt(key *openpgp.Key, sig *packet.Signature, at time.Time) error {
+// notation this verifier does not know on the self-signature, the
+// binding or its back-signature (RFC 9580: a critical subpacket
+// unknown to the verifier fails the signature) — the key's own
+// statements, judged with the key; the data signature's is judged
+// before, as the signature's fault.
+func openPGPValidAt(key *openpgp.Key, at time.Time) error {
 	e := key.Entity
 	primarySig, primaryID := e.PrimarySelfSignature()
 	if primarySig == nil {
 		return errors.New("the key carries no self-signature")
 	}
-	for _, s := range []*packet.Signature{sig, primarySig, key.SelfSignature, key.SelfSignature.EmbeddedSignature} {
+	for _, s := range []*packet.Signature{primarySig, key.SelfSignature, key.SelfSignature.EmbeddedSignature} {
 		if err := noCriticalNotation(s); err != nil {
 			return err
 		}
@@ -596,7 +617,7 @@ func verifySSH(payload, sig []byte, keys []PinnedKey) (*VerifiedKey, error) {
 		}
 	}
 	if len(pinned) == 0 {
-		return nil, errors.New("gitprov: no pinned key of the signature's kind (ssh)")
+		return nil, fmt.Errorf("%w: no pinned key of the signature's kind (ssh)", ErrUnpinnedKey)
 	}
 	blk, _ := pem.Decode(sig)
 	if blk == nil {
@@ -639,7 +660,7 @@ func verifySSH(payload, sig []byte, keys []PinnedKey) (*VerifiedKey, error) {
 		}
 	}
 	if key == nil {
-		return nil, fmt.Errorf("gitprov: SSH signature by an unpinned key %s", fp)
+		return nil, fmt.Errorf("%w: SSH signature by an unpinned key %s", ErrUnpinnedKey, fp)
 	}
 	var sshSig ssh.Signature
 	if err := ssh.Unmarshal([]byte(env.Signature), &sshSig); err != nil {

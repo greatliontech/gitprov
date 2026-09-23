@@ -17,8 +17,9 @@
 // ErrSignatureKind; VerifyPinned takes an OpenPGP or an SSH signature
 // and verifies it against exactly the keys the caller pins
 // (ParsePinnedKey), offline and without transparency, the outcome
-// naming the key's kind and fingerprint (REQ-verify-pinned-key). A
-// caller routing by kind reads it first.
+// naming the key's kind and fingerprint, a signature the keys do not
+// vouch for ErrUnpinnedKey (REQ-verify-pinned-key). A caller routing
+// by kind reads it first.
 //
 // Only signatures made in gitsign's offline Rekor mode
 // (`gitsign.rekorMode=offline`) carry the embedded proof. A signature

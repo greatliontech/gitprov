@@ -69,23 +69,28 @@ func TestVerifyPinnedOpenPGPFixtures(t *testing.T) {
 		}
 	})
 	for _, tt := range []struct {
-		name string
-		obj  Object
-		keys []PinnedKey
-		want string
+		name     string
+		obj      Object
+		keys     []PinnedKey
+		want     string
+		unpinned bool // the failure is ErrUnpinnedKey: no pinned key vouches
 	}{
-		{"the tag under the other key alone", tag, pinnedOpenPGP(t, keyB), "unpinned key"},
-		{"the tag under no key", tag, nil, "no pinned key of the signature's kind"},
-		{"the tag under SSH keys alone", tag, PinnedSSH(t, sshKey), "no pinned key of the signature's kind (openpgp)"},
-		{"the tag's message changed", Object{Kind: Tag, Format: SHA1, Raw: bytes.Replace(tag.Raw, []byte("fixture tag"), []byte("fixture TAG"), 1)}, pinnedOpenPGP(t, keyA), "does not verify"},
-		{"the commit in the other form", Object{Kind: Commit, Format: SHA256, Raw: commit.Raw}, pinnedOpenPGP(t, keyA), "not signed"},
-		{"the subkey tag's signature transplanted", Object{Kind: Tag, Format: SHA1, Raw: transplant(t, tag.Raw, subkeyTag.Raw)}, pinnedOpenPGP(t, keyA, keyB), "does not verify"},
-		{"a SHA-1-digest signature gpg still makes", Object{Kind: Tag, Format: SHA1, Raw: readFixture(t, "openpgp-fixture-sha1-tag.txt")}, pinnedOpenPGP(t, keyA), "which is refused"},
-		{"an SSH signature under OpenPGP keys alone", Object{Kind: Tag, Format: SHA1, Raw: readFixture(t, "ssh-fixture-tag.txt")}, pinnedOpenPGP(t, keyA), "no pinned key of the signature's kind (ssh)"},
+		{"the tag under the other key alone", tag, pinnedOpenPGP(t, keyB), "unpinned key", true},
+		{"the tag under no key", tag, nil, "no pinned key of the signature's kind", true},
+		{"the tag under SSH keys alone", tag, PinnedSSH(t, sshKey), "no pinned key of the signature's kind (openpgp)", true},
+		{"the tag's message changed", Object{Kind: Tag, Format: SHA1, Raw: bytes.Replace(tag.Raw, []byte("fixture tag"), []byte("fixture TAG"), 1)}, pinnedOpenPGP(t, keyA), "does not verify", false},
+		{"the commit in the other form", Object{Kind: Commit, Format: SHA256, Raw: commit.Raw}, pinnedOpenPGP(t, keyA), "not signed", false},
+		{"the subkey tag's signature transplanted", Object{Kind: Tag, Format: SHA1, Raw: transplant(t, tag.Raw, subkeyTag.Raw)}, pinnedOpenPGP(t, keyA, keyB), "does not verify", false},
+		{"a SHA-1-digest signature gpg still makes", Object{Kind: Tag, Format: SHA1, Raw: readFixture(t, "openpgp-fixture-sha1-tag.txt")}, pinnedOpenPGP(t, keyA), "which is refused", false},
+		{"an SSH signature under OpenPGP keys alone", Object{Kind: Tag, Format: SHA1, Raw: readFixture(t, "ssh-fixture-tag.txt")}, pinnedOpenPGP(t, keyA), "no pinned key of the signature's kind (ssh)", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := VerifyPinned(tt.obj, tt.keys); err == nil || !strings.Contains(err.Error(), tt.want) {
+			_, err := VerifyPinned(tt.obj, tt.keys)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("VerifyPinned = %v, want %q", err, tt.want)
+			}
+			if errors.Is(err, ErrUnpinnedKey) != tt.unpinned {
+				t.Fatalf("VerifyPinned = %v; ErrUnpinnedKey = %v, want %v", err, !tt.unpinned, tt.unpinned)
 			}
 		})
 	}

@@ -108,6 +108,29 @@ func (k *OpenPGPKey) ReSignWithoutFlags(t testing.TB, at time.Time) *OpenPGPKey 
 	return k
 }
 
+// ReSignWithCriticalNotation adds a fresh self-signature of the key's
+// identity made at the time carrying a critical notation no verifier
+// knows: the key's own statement a verifier cannot honor.
+func (k *OpenPGPKey) ReSignWithCriticalNotation(t testing.TB, at time.Time) *OpenPGPKey {
+	t.Helper()
+	e := k.entity
+	for name, id := range e.Identities {
+		sig := k.signatureAt(packet.SigTypePositiveCert, at)
+		sig.KeyLifetimeSecs = id.SelfSignature.KeyLifetimeSecs
+		sig.FlagsValid = id.SelfSignature.FlagsValid
+		sig.FlagSign = id.SelfSignature.FlagSign
+		sig.FlagCertify = id.SelfSignature.FlagCertify
+		sig.IsPrimaryId = id.SelfSignature.IsPrimaryId
+		sig.Notations = []*packet.Notation{{Name: "crit@sigstoretest.invalid", Value: []byte("1"), IsCritical: true, IsHumanReadable: true}}
+		if err := sig.SignUserId(name, e.PrimaryKey, e.PrivateKey, k.configAt(at)); err != nil {
+			t.Fatal(err)
+		}
+		id.Signatures = append(id.Signatures, sig)
+		id.SelfSignature = sig
+	}
+	return k
+}
+
 // ReSignForA adds a fresh self-signature of the key's identity made
 // at the time and valid for the duration — a self-signature with a
 // lifetime of its own.
