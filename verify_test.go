@@ -314,24 +314,24 @@ func TestSetRekor(t *testing.T) {
 	})
 }
 
-// TestParseCMS pins the single CMS-structural-parse path: PEM and bare
-// DER both parse, and each malformed layer fails with its own error so
-// no failure is silently absorbed by a later stage.
+// TestParseCMS pins the single CMS-structural-parse path: the DER the
+// kind selection yielded parses, a PEM block handed to it does not —
+// the block type is judged before the bytes are read, and the parse
+// takes the bytes alone — and each malformed layer fails with its own
+// error so no failure is silently absorbed by a later stage.
 func TestParseCMS(t *testing.T) {
-	sigPEM, _ := fixtureSigLeaf(t)
+	der, _ := fixtureSigLeaf(t)
 
-	t.Run("PEM-armored signature parses", func(t *testing.T) {
-		if _, err := parseCMS(sigPEM); err != nil {
-			t.Fatalf("parseCMS(PEM) = %v, want nil", err)
+	t.Run("the signature's DER parses", func(t *testing.T) {
+		if _, err := parseCMS(der); err != nil {
+			t.Fatalf("parseCMS(DER) = %v, want nil", err)
 		}
 	})
-	t.Run("bare DER parses identically", func(t *testing.T) {
-		blk, _ := pem.Decode(sigPEM)
-		if blk == nil {
-			t.Fatal("fixture signature is not PEM")
-		}
-		if _, err := parseCMS(blk.Bytes); err != nil {
-			t.Fatalf("parseCMS(DER) = %v, want nil", err)
+	t.Run("a PEM block is not the parse's input", func(t *testing.T) {
+		armored := pem.EncodeToMemory(&pem.Block{Type: "SIGNED MESSAGE", Bytes: der})
+		if _, err := parseCMS(armored); err == nil ||
+			!strings.Contains(err.Error(), "parse CMS") {
+			t.Fatalf("parseCMS(PEM) = %v, want parse-CMS error", err)
 		}
 	})
 	t.Run("garbage fails at ContentInfo", func(t *testing.T) {
@@ -457,11 +457,7 @@ func TestOfflineRekorVerify(t *testing.T) {
 		// binding dropped, the attacker-supplied entry body would verify
 		// against the pinned log on its own and lend transparency to a
 		// signature the log never saw.
-		blk, _ := pem.Decode(sig)
-		if blk == nil {
-			t.Fatal("fixture signature is not PEM")
-		}
-		ci, err := protocol.ParseContentInfo(blk.Bytes)
+		ci, err := protocol.ParseContentInfo(sig)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -507,8 +503,7 @@ func TestOfflineRekorVerify(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		fixBlk, _ := pem.Decode(sig)
-		fixCI, err := protocol.ParseContentInfo(fixBlk.Bytes)
+		fixCI, err := protocol.ParseContentInfo(sig)
 		if err != nil {
 			t.Fatal(err)
 		}

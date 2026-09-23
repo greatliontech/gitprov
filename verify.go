@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"time"
@@ -94,9 +93,16 @@ func Verify(ctx context.Context, obj Object, id Identity, tr *TrustedRoot, requi
 
 // verifyCertChain runs the gitsign Fulcio cert-chain verification on
 // the object's detached signature against the pinned trusted root,
-// returning the verified leaf and the (PEM) CMS signature bytes.
+// returning the verified leaf and the CMS signature's DER.
 func verifyCertChain(ctx context.Context, obj Object, tr *TrustedRoot) (leaf *x509.Certificate, sig []byte, err error) {
 	payload, sig, err := splitSignature(obj)
+	if err != nil {
+		return nil, nil, err
+	}
+	// The kind is selected before any verifier reads the bytes
+	// (REQ-verify-signature-kind): from here sig is the CMS DER of a
+	// signature its label states as gitsign's.
+	sig, err = sigstoreSignature(sig)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -112,8 +118,9 @@ func verifyCertChain(ctx context.Context, obj Object, tr *TrustedRoot) (leaf *x5
 		return nil, nil, fmt.Errorf("gitprov: build cert verifier: %w", err)
 	}
 	// Detached: a git signature signs the payload, not an embedded
-	// econtent.
-	leaf, err = cv.Verify(ctx, payload, sig, true)
+	// econtent. The verifier is handed the DER freshly armored, never
+	// the DER itself (armorSigstore).
+	leaf, err = cv.Verify(ctx, payload, armorSigstore(sig), true)
 	if err != nil {
 		return nil, nil, fmt.Errorf("gitprov: certificate chain: %w", err)
 	}
@@ -134,36 +141,13 @@ func certFingerprint(c *x509.Certificate) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
-// parseCMS PEM/DER-decodes a gitsign CMS signature to its first
-// SignerInfo. This is the single CMS-structural-parse path of the
-// package (embedded-proof detection and signed-attrs extraction), so
-// the security-critical parse is audited in exactly one place.
-func parseCMS(sig []byte) (protocol.SignerInfo, error) {
-	der := sig
-	if blk, _ := pem.Decode(sig); blk != nil {
-		der = blk.Bytes
-	}
-	ci, err := protocol.ParseContentInfo(der)
-	if err != nil {
-		return protocol.SignerInfo{}, fmt.Errorf("gitprov: parse CMS: %w", err)
-	}
-	sd, err := ci.SignedDataContent()
-	if err != nil {
-		return protocol.SignerInfo{}, fmt.Errorf("gitprov: CMS signed-data: %w", err)
-	}
-	if len(sd.SignerInfos) == 0 {
-		return protocol.SignerInfo{}, fmt.Errorf("gitprov: no signers in signature")
-	}
-	return sd.SignerInfos[0], nil
-}
-
-// cmsCertificates is the certificate set the CMS signature carries —
-// the leaf and any intermediates the signer attached.
-func cmsCertificates(sig []byte) ([]*x509.Certificate, error) {
-	der := sig
-	if blk, _ := pem.Decode(sig); blk != nil {
-		der = blk.Bytes
-	}
+// parseSignedData decodes a gitsign CMS signature's DER to its
+// SignedData. This is the single CMS-structural-parse path of the
+// package (embedded-proof detection, signed-attrs extraction, the
+// carried certificates), so the security-critical parse is audited in
+// exactly one place. It takes the DER sigstoreSignature yielded, never
+// an armored block: the label was judged before the bytes are read.
+func parseSignedData(der []byte) (*protocol.SignedData, error) {
 	ci, err := protocol.ParseContentInfo(der)
 	if err != nil {
 		return nil, fmt.Errorf("gitprov: parse CMS: %w", err)
@@ -171,6 +155,28 @@ func cmsCertificates(sig []byte) ([]*x509.Certificate, error) {
 	sd, err := ci.SignedDataContent()
 	if err != nil {
 		return nil, fmt.Errorf("gitprov: CMS signed-data: %w", err)
+	}
+	return sd, nil
+}
+
+// parseCMS is the signature's first SignerInfo.
+func parseCMS(der []byte) (protocol.SignerInfo, error) {
+	sd, err := parseSignedData(der)
+	if err != nil {
+		return protocol.SignerInfo{}, err
+	}
+	if len(sd.SignerInfos) == 0 {
+		return protocol.SignerInfo{}, fmt.Errorf("gitprov: no signers in signature")
+	}
+	return sd.SignerInfos[0], nil
+}
+
+// cmsCertificates is the certificate set the CMS signature's DER
+// carries — the leaf and any intermediates the signer attached.
+func cmsCertificates(der []byte) ([]*x509.Certificate, error) {
+	sd, err := parseSignedData(der)
+	if err != nil {
+		return nil, err
 	}
 	certs, err := sd.X509Certificates()
 	if err != nil {
@@ -181,10 +187,11 @@ func cmsCertificates(sig []byte) ([]*x509.Certificate, error) {
 
 // parseSignerInfo extracts the first CMS SignerInfo's signed-attrs
 // "message" (the bytes the signature actually covers), its signature,
-// and its unsigned attributes, asserting the signer cert is leaf. Used
-// by the embedded transparency verification path.
-func parseSignerInfo(sig []byte, leaf *x509.Certificate) (message, siSig []byte, attrs protocol.Attributes, err error) {
-	si, err := parseCMS(sig)
+// and its unsigned attributes from the signature's DER, asserting the
+// signer cert is leaf. Used by the embedded transparency verification
+// path.
+func parseSignerInfo(der []byte, leaf *x509.Certificate) (message, siSig []byte, attrs protocol.Attributes, err error) {
+	si, err := parseCMS(der)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -200,12 +207,12 @@ func parseSignerInfo(sig []byte, leaf *x509.Certificate) (message, siSig []byte,
 
 // offlineRekorVerify is the embedded transparency path
 // (REQ-verify-embedded-rekor): the entry is decoded from the
-// signature's CMS unsigned attributes, bound to this signature, and
-// verified offline against the pinned trusted root's Rekor keys. It
-// re-implements gitsign pkg/rekor.Client.VerifyInclusion's logic
+// signature DER's CMS unsigned attributes, bound to this signature,
+// and verified offline against the pinned trusted root's Rekor keys.
+// It re-implements gitsign pkg/rekor.Client.VerifyInclusion's logic
 // without its hard-wired cosign TUF/network global.
-func offlineRekorVerify(ctx context.Context, sig []byte, leaf *x509.Certificate, tr *TrustedRoot) (*models.LogEntryAnon, error) {
-	message, siSig, attrs, err := parseSignerInfo(sig, leaf)
+func offlineRekorVerify(ctx context.Context, der []byte, leaf *x509.Certificate, tr *TrustedRoot) (*models.LogEntryAnon, error) {
+	message, siSig, attrs, err := parseSignerInfo(der, leaf)
 	if err != nil {
 		return nil, err
 	}

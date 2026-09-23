@@ -13,7 +13,9 @@ package gitprov
 // inspects for the attribute's presence, so consumers can produce a
 // precise unverifiable-versus-invalid diagnosis. An unsigned or
 // structurally malformed object returns an error rather than answering
-// false, so callers fail closed.
+// false, so callers fail closed; so does an object signed by a
+// signature of another kind (ErrSignatureKind), which carries no
+// sigstore attribute to inspect.
 func HasEmbeddedRekor(obj Object) (bool, error) {
 	if err := obj.validate(); err != nil {
 		return false, err
@@ -22,7 +24,14 @@ func HasEmbeddedRekor(obj Object) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	si, err := parseCMS(sig)
+	// Only a sigstore signature can carry the attribute; a signature
+	// of another kind is ErrSignatureKind, never false
+	// (REQ-verify-signature-kind, REQ-detect-embedded).
+	der, err := sigstoreSignature(sig)
+	if err != nil {
+		return false, err
+	}
+	si, err := parseCMS(der)
 	if err != nil {
 		return false, err
 	}

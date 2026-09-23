@@ -40,3 +40,13 @@ bindings {
   role: BINDING_ROLE_TESTS
   shape_hash: "09ddfdb6283f545c649180f7b37ae1a71d32358da398e813207ed3607475c766"
 }
+
+bindings {
+  requirement_id: "REQ-detect-embedded"
+  content_hash: "992b384a7325ccfc93ed4b71179f5c1edae5b0cf70194489026947b84d6bd706"
+  source_hash: "e674db6508f1620f7e33d119f2a6ed42b3556700195e050fe7d9e7e812c8cde6"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestSigstorePathsRefuseOtherKinds"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "5b48d3258d5b163080796086dbf748bba16ff0ca0220d835d3a4d8a5c5364876"
+}

@@ -10,6 +10,12 @@
 // and judged at a signed time, all verified against a caller-pinned
 // trusted root. No service is ever queried.
 //
+// The label of a git signature's armor header line states its kind —
+// gitsign's CMS, OpenPGP, SSH — and the kind selects the verifier
+// (SignatureKindOf, REQ-verify-signature-kind): Verify takes a
+// sigstore signature and fails on any other kind with
+// ErrSignatureKind, so a caller routing by kind reads it first.
+//
 // Only signatures made in gitsign's offline Rekor mode
 // (`gitsign.rekorMode=offline`) carry the embedded proof. A signature
 // from gitsign's default online mode is unverifiable with transparency
@@ -21,9 +27,13 @@
 // Mechanism notes:
 //
 //   - Certificate-chain verification uses gitsign's public pkg/git:
-//     SplitCommit/SplitTag for git-core-faithful raw-byte splitting
-//     (never a library object re-encode) and CertVerifier over Fulcio
-//     pools built from the pinned trusted root.
+//     SplitCommit/SplitTag for raw-byte splitting (never a library
+//     object re-encode), trusted only where their join reproduces the
+//     raw bytes — their line reading drops a carriage return,
+//     normalizes an indented signature line and completes a final
+//     line, and an object so rebuilt is refused (object.go) — and
+//     CertVerifier over Fulcio pools built from the pinned trusted
+//     root.
 //   - The offline Rekor inclusion check cannot use gitsign's own
 //     verifier: pkg/rekor.Client.VerifyInclusion is hard-wired to
 //     cosign's TUF/network trusted-root global, and its reconstruction

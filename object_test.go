@@ -2,6 +2,7 @@ package gitprov
 
 import (
 	"bytes"
+	"context"
 	"encoding/pem"
 	"strings"
 	"testing"
@@ -237,6 +238,86 @@ func TestSplitSignatureRoundTripsRawBytes(t *testing.T) {
 		}
 		if !bytes.Equal(gotSig, sig) {
 			t.Fatalf("signature not byte-identical\ngot:\n%q\nwant:\n%q", gotSig, sig)
+		}
+	})
+}
+
+// The split reads lines and rebuilds the payload; an object its join
+// does not reproduce is refused, never verified over other bytes
+// (REQ-verify-raw-bytes): a carriage return before a newline, which
+// the line reader drops; an indented signature line, which it
+// normalizes; a final line without its newline, which it completes.
+func TestSplitRefusesLossyObjects(t *testing.T) {
+	raw, _ := loadEmbeddedFixture(t)
+	fakePEM := pem.EncodeToMemory(&pem.Block{Type: "SIGNED MESSAGE", Bytes: []byte("fakesig")})
+	tag, err := gitsign.JoinTag(&gitsign.TagSig{Payload: minimalTagPayload(), InBody: fakePEM})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit, err := gitsign.JoinCommit(&gitsign.CommitSig{Payload: minimalCommitPayload(), Gpgsig: fakePEM})
+	if err != nil {
+		t.Fatal(err)
+	}
+	crAt := func(b []byte, i int) []byte {
+		return append(append(append([]byte(nil), b[:i]...), '\r'), b[i:]...)
+	}
+	crBefore := func(b []byte, marker string) []byte {
+		i := bytes.Index(b, []byte(marker))
+		if i < 0 {
+			t.Fatalf("no %q in the object", marker)
+		}
+		return crAt(b, i)
+	}
+	// crInMessage puts the return before the message's first newline:
+	// the body after the header terminator, where git keeps a return
+	// as content.
+	crInMessage := func(b []byte) []byte {
+		body := bytes.Index(b, []byte("\n\n")) + 2
+		return crAt(b, body+bytes.IndexByte(b[body:], '\n'))
+	}
+	indent := func(b []byte) []byte {
+		// The signature's second line indented twice: git reads one
+		// space as the continuation, the reader any.
+		i := bytes.Index(b, []byte("\n "))
+		return append(append(append([]byte(nil), b[:i+1]...), ' '), b[i+1:]...)
+	}
+	const want = "not what its split reads"
+	for _, tt := range []struct {
+		name string
+		obj  Object
+	}{
+		{"fixture commit, a carriage return before its first newline", Object{Commit, SHA1, crBefore(raw, "\n")}},
+		{"fixture commit, a carriage return within its signature", Object{Commit, SHA1, crBefore(raw, "\n\n")}},
+		{"fixture commit, a carriage return in its message", Object{Commit, SHA1, crInMessage(raw)}},
+		{"fixture commit, its final newline dropped", Object{Commit, SHA1, bytes.TrimSuffix(raw, []byte("\n"))}},
+		{"commit, its signature's second line indented twice", Object{Commit, SHA1, indent(commit)}},
+		{"tag, a carriage return after its last header", Object{Tag, SHA1, crBefore(tag, "\n\n")}},
+		{"tag, a carriage return in its message", Object{Tag, SHA1, crInMessage(tag)}},
+		{"tag, a carriage return within its signature", Object{Tag, SHA1, crBefore(tag, "\n-----END")}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, _, err := splitSignature(tt.obj); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("splitSignature = %v, want %q", err, want)
+			}
+		})
+	}
+	t.Run("an unsigned commit with a carriage return is unsigned, not lossy", func(t *testing.T) {
+		if _, _, err := splitSignature(Object{Commit, SHA1, crInMessage(minimalCommitPayload())}); err == nil ||
+			!strings.Contains(err.Error(), "not signed") {
+			t.Fatalf("splitSignature(unsigned) = %v, want not-signed error", err)
+		}
+	})
+	t.Run("the fixture commit's own bytes split", func(t *testing.T) {
+		if _, _, err := splitSignature(Object{Commit, SHA1, raw}); err != nil {
+			t.Fatalf("splitSignature(fixture) = %v, want nil", err)
+		}
+	})
+	t.Run("a carriage-returned commit verifies nowhere", func(t *testing.T) {
+		_, tr := loadEmbeddedFixture(t)
+		obj := Object{Commit, SHA1, crInMessage(raw)}
+		id := Identity{Subject: fixtureSubject, Issuer: fixtureIssuer}
+		if _, err := Verify(context.Background(), obj, id, tr, true); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("Verify(carriage-returned fixture) = %v, want refusal", err)
 		}
 	})
 }

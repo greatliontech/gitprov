@@ -3,11 +3,9 @@ package gitprov
 import (
 	"bytes"
 	"crypto/x509"
-	"encoding/pem"
 	"os"
 	"testing"
 
-	"github.com/github/smimesign/ietf-cms/protocol"
 	gitsign "github.com/sigstore/gitsign/pkg/git"
 )
 
@@ -37,35 +35,37 @@ func loadEmbeddedFixture(t *testing.T) (raw []byte, tr *TrustedRoot) {
 	return raw, tr
 }
 
-// fixtureSigLeaf extracts the PEM CMS signature and the signer leaf
+// fixtureSigLeaf extracts the CMS signature's DER and the signer leaf
 // certificate from the embedded fixture commit, for tests that drive
 // the unexported verification internals directly.
-func fixtureSigLeaf(t *testing.T) (sig []byte, leaf *x509.Certificate) {
+func fixtureSigLeaf(t *testing.T) (der []byte, leaf *x509.Certificate) {
 	t.Helper()
 	raw, _ := loadEmbeddedFixture(t)
 	cs, err := gitsign.SplitCommit(bytes.NewReader(raw))
 	if err != nil {
 		t.Fatalf("split fixture commit: %v", err)
 	}
-	der := cs.Gpgsig
-	if blk, _ := pem.Decode(cs.Gpgsig); blk != nil {
-		der = blk.Bytes
-	}
-	ci, err := protocol.ParseContentInfo(der)
+	return signerOf(t, cs.Gpgsig)
+}
+
+// signerOf decodes an armored sigstore signature to its DER and the
+// certificate that signed it, through the production readers.
+func signerOf(t *testing.T, armored []byte) (der []byte, leaf *x509.Certificate) {
+	t.Helper()
+	der, err := sigstoreSignature(armored)
 	if err != nil {
-		t.Fatalf("parse fixture CMS: %v", err)
+		t.Fatalf("decode signature: %v", err)
 	}
-	sd, err := ci.SignedDataContent()
-	if err != nil {
-		t.Fatalf("fixture signed-data: %v", err)
-	}
-	certs, err := sd.X509Certificates()
+	certs, err := cmsCertificates(der)
 	if err != nil || len(certs) == 0 {
-		t.Fatalf("fixture certs: %v (n=%d)", err, len(certs))
+		t.Fatalf("signature certs: %v (n=%d)", err, len(certs))
 	}
-	leaf, err = sd.SignerInfos[0].FindCertificate(certs)
+	si, err := parseCMS(der)
 	if err != nil {
-		t.Fatalf("fixture signer cert: %v", err)
+		t.Fatalf("signature signer: %v", err)
 	}
-	return cs.Gpgsig, leaf
+	if leaf, err = si.FindCertificate(certs); err != nil {
+		t.Fatalf("signer cert: %v", err)
+	}
+	return der, leaf
 }

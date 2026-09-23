@@ -151,12 +151,19 @@ caller's policy carries that knowledge.
 verification: an OpenPGP public key or an SSH public key, verified
 against directly, never looked up.
 
-**REQ-verify-signature-kind** (behavior): The signature's PEM block
-type MUST select its verifier: `SIGNED MESSAGE` is gitsign's CMS
+**REQ-verify-signature-kind** (behavior): The label of the signature's
+armor header line — the `-----BEGIN <label>-----` line that opens
+gitsign's PEM, OpenPGP's ASCII armor and the SSH signature armor
+alike — MUST select its verifier: `SIGNED MESSAGE` is gitsign's CMS
 signature, verified as this document states above; `PGP SIGNATURE` an
-OpenPGP signature; `SSH SIGNATURE` an SSH signature; any other type,
-and a signature whose bytes do not parse as its type states, fail
-closed. Lands: pb's pinned-key provenance plan.
+OpenPGP signature; `SSH SIGNATURE` an SSH signature. The signature is
+exactly one armored block: it begins with its header line, ends with
+the matching footer line with nothing but ASCII whitespace after it,
+and holds no other header or footer line. Any other label — `PGP
+MESSAGE` included, a legacy spelling of an OpenPGP detached
+signature that git admits and no current producer writes — a
+signature that is not one such block, and a body that does not
+decode as its kind's armor and format state, fail closed.
 
 **REQ-verify-pinned-key** (behavior): An OpenPGP or SSH signature MUST
 verify against the caller's pinned keys and no other — the signing

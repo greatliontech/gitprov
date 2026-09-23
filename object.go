@@ -53,8 +53,9 @@ func (o Object) validate() error {
 	return nil
 }
 
-// splitSignature extracts the payload the signature covers and the PEM
-// CMS signature, from the location that signs the form in hand
+// splitSignature extracts the payload the signature covers and the
+// signature — the armored block as git stores it, its kind not yet
+// read — from the location that signs the form in hand
 // (REQ-verify-signature-extraction, git's hash-function-transition
 // rules): a commit's gpgsig header signs its SHA-1 form and
 // gpgsig-sha256 its SHA-256 form, so the header follows Format; a tag's
@@ -62,6 +63,19 @@ func (o Object) validate() error {
 // gpgsig/gpgsig-sha256 headers — alternate-form signatures — are never
 // selected. An object with no signature at its form's location is
 // unsigned and fails (REQ-verify-fail-closed).
+//
+// The split reads the object line by line and rebuilds the payload,
+// which is faithful to the raw bytes only when its join reproduces
+// them (REQ-verify-raw-bytes): a carriage return before a newline is
+// dropped by the line reader, an indented signature line normalized,
+// a final line without its newline given one. An object the join does
+// not reproduce is refused, since the signature would otherwise be
+// verified over bytes other than the ones in hand — an object
+// differing from the signed one by such bytes, and so by its id,
+// would verify as it. The refusal also meets objects git itself
+// verifies, a message carrying a carriage return or lacking its
+// final newline; verifying those needs a split keeping every byte
+// (docs/issues/split-refuses-git-valid-objects.md).
 func splitSignature(o Object) (payload, sig []byte, err error) {
 	if o.Kind == Tag {
 		ts, err := gitsign.SplitTag(bytes.NewReader(o.Raw))
@@ -70,6 +84,10 @@ func splitSignature(o Object) (payload, sig []byte, err error) {
 		}
 		if ts.InBody == nil {
 			return nil, nil, fmt.Errorf("gitprov: tag is not signed")
+		}
+		joined, err := gitsign.JoinTag(ts)
+		if err := rawBytesSplit(o.Raw, joined, err); err != nil {
+			return nil, nil, err
 		}
 		return ts.Payload, ts.InBody, nil
 	}
@@ -81,8 +99,27 @@ func splitSignature(o Object) (payload, sig []byte, err error) {
 	if o.Format == SHA256 {
 		sig = cs.GpgsigSha256
 	}
+	// Unsigned is judged before faithfulness, as for a tag: an
+	// unsigned object is absent evidence to a consumer, never a
+	// malformed one.
 	if sig == nil {
 		return nil, nil, fmt.Errorf("gitprov: commit is not signed (no %s-form signature)", o.Format)
 	}
+	joined, err := gitsign.JoinCommit(cs)
+	if err := rawBytesSplit(o.Raw, joined, err); err != nil {
+		return nil, nil, err
+	}
 	return cs.Payload, sig, nil
+}
+
+// rawBytesSplit is the split's faithfulness check: its join reproduces
+// the raw bytes exactly, or the object is refused.
+func rawBytesSplit(raw, joined []byte, joinErr error) error {
+	if joinErr != nil {
+		return fmt.Errorf("gitprov: join split object: %w", joinErr)
+	}
+	if !bytes.Equal(joined, raw) {
+		return fmt.Errorf("gitprov: the object's bytes are not what its split reads: the signature would verify other bytes than the ones in hand")
+	}
+	return nil
 }

@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"os"
 	"strings"
 	"testing"
@@ -40,26 +39,10 @@ func TestRekoroidGoldenFidelity(t *testing.T) {
 		t.Fatal("vendored fixture commit has no gpgsig")
 	}
 
-	der := cs.Gpgsig
-	if blk, _ := pem.Decode(cs.Gpgsig); blk != nil {
-		der = blk.Bytes
-	}
-	ci, err := protocol.ParseContentInfo(der)
+	der, leaf := signerOf(t, cs.Gpgsig)
+	si, err := parseCMS(der)
 	if err != nil {
 		t.Fatalf("parse CMS: %v", err)
-	}
-	sd, err := ci.SignedDataContent()
-	if err != nil {
-		t.Fatalf("signed data: %v", err)
-	}
-	certs, err := sd.X509Certificates()
-	if err != nil || len(certs) == 0 {
-		t.Fatalf("certs: %v (n=%d)", err, len(certs))
-	}
-	si := sd.SignerInfos[0]
-	leaf, err := si.FindCertificate(certs)
-	if err != nil {
-		t.Fatalf("find signer cert: %v", err)
 	}
 	message, err := si.SignedAttrs.MarshaledForVerification()
 	if err != nil {
