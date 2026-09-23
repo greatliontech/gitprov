@@ -14,11 +14,11 @@
 // gitsign's CMS, OpenPGP, SSH — and the kind selects the verifier
 // (SignatureKindOf, REQ-verify-signature-kind): Verify takes a
 // sigstore signature and fails on any other kind with
-// ErrSignatureKind; VerifyPinned takes an SSH signature — the
-// OpenPGP arm is not built — and verifies it against exactly the
-// keys the caller pins (ParsePinnedKey), offline and without
-// transparency, the outcome naming the key's kind and fingerprint
-// (REQ-verify-pinned-key). A caller routing by kind reads it first.
+// ErrSignatureKind; VerifyPinned takes an OpenPGP or an SSH signature
+// and verifies it against exactly the keys the caller pins
+// (ParsePinnedKey), offline and without transparency, the outcome
+// naming the key's kind and fingerprint (REQ-verify-pinned-key). A
+// caller routing by kind reads it first.
 //
 // Only signatures made in gitsign's offline Rekor mode
 // (`gitsign.rekorMode=offline`) carry the embedded proof. A signature

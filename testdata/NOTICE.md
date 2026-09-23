@@ -70,3 +70,27 @@ report a good signature on each under the matching key.
   commit, signed by the 2048-bit RSA key `ssh-fixture-rsa-key.pub`
   (fingerprint `SHA256:qJf90eocttnD82cEmd3HjozFS3VFv2VfFEZPKsGOxRc`)
   in the rsa-sha2-512 form ssh-keygen writes.
+
+## OpenPGP-signed fixtures
+
+Real objects git 2.55 wrote and GnuPG 2.4.9 signed, made 2026-09-23
+by the author in a throwaway repository and keyring with keys made
+for the purpose and discarded; no secret material, no third-party
+material. `git verify-commit` and `git verify-tag` report a good
+signature on each under the matching key.
+
+- `openpgp-fixture-commit.txt`: an empty commit signed by the
+  EdDSA key `openpgp-fixture-key.asc` (fingerprint
+  `91EDFEA1C6643EA64EC693516EA5914F2DADE816`), whose primary key
+  signs.
+- `openpgp-fixture-tag.txt`: the annotated tag `v1.0.0` of that
+  commit, signed by the same key.
+- `openpgp-fixture-subkey-tag.txt`: the annotated tag `v1.0.1` of
+  that commit, signed by the signing subkey (fingerprint
+  `9167A78376D46BA35072403CCFFBD328B260CD77`) of the certify-only
+  key `openpgp-fixture-subkey-key.asc` (primary fingerprint
+  `225F3F5BE4F54F0A97C90D557D51FFB6BCF54190`).
+- `openpgp-fixture-sha1-tag.txt`: the annotated tag `v1.0.2` of that
+  commit, signed by the first key with `digest-algo SHA1` set for
+  gpg, which git still reports as a good signature; the verifier
+  refuses SHA-1 message digests.

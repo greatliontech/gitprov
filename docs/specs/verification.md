@@ -182,8 +182,31 @@ strictly — no armor header lines, no bytes beside the envelope,
 none after the signature blob but a FIDO key's flags and counter,
 asserting user presence — and never in the SHA-1 RSA form; a pinned
 SSH key is one OpenSSH public key line naming no certificate, no
-DSA key and no RSA key under 1024 bits.
-Lands: the OpenPGP arm with pb's pinned-key provenance plan.
+DSA key and no RSA key under 1024 bits. An OpenPGP signature is one binary-mode detached
+signature packet — a text-mode one, verified over a canonical form
+of the payload rather than its bytes, is refused, as are bytes
+after the packet — under a hash the library admits for messages,
+SHA-1 and MD5 refused, made by a pinned key's primary key or one of
+its signing subkeys and named by the primary key's fingerprint, and
+judged at its own creation time — the signing key created by then
+and not expired at it by its latest self-signature, whenever that
+was made, that self-signature's and a subkey binding's own lifetime
+not lapsed by then, neither it, its primary key nor the primary
+identity revoked at it, a hard revocation (no reason, compromise, a
+reason unknown) counting against every signature and a soft one
+(superseded, retired) from its own time, as RFC 9580 reads them —
+so a verdict never changes with the clock and expiry and revocation
+reach the caller by unpinning alone; a critical notation on the
+signature, the self-signature, the binding or its back-signature
+fails it, as RFC 9580 has an unknown critical subpacket fail; a
+key signs by what its self-signature's key flags state, one stating
+none signing nothing; a third party's certification — a signature
+of a certification type — in a form the library cannot read is
+passed over in a pinned key's block, and nothing else unreadable is,
+there or in a signature body; the
+armor checksum, optional under RFC 9580, is not judged. A pinned
+OpenPGP key is one armored public key block holding one key and no
+private material, its line ends LF or CRLF.
 
 ## Trusted root
 

@@ -668,6 +668,10 @@ func TestProductionImportsCarryNoNetworkCapability(t *testing.T) {
 				"github.com/github/smimesign/ietf-cms/protocol",
 				"github.com/go-openapi/strfmt",
 				"github.com/greatliontech/glob",
+				"github.com/ProtonMail/go-crypto/openpgp",
+				"github.com/ProtonMail/go-crypto/openpgp/armor",
+				"github.com/ProtonMail/go-crypto/openpgp/errors",
+				"github.com/ProtonMail/go-crypto/openpgp/packet",
 				"golang.org/x/crypto/ssh",
 				"github.com/go-openapi/swag/conv",
 				"github.com/sigstore/cosign/v3/pkg/cosign",
@@ -694,7 +698,7 @@ func TestProductionImportsCarryNoNetworkCapability(t *testing.T) {
 			StandardLibrary: []string{
 				"bytes", "context", "crypto", "crypto/rsa", "crypto/sha256", "crypto/sha512", "crypto/x509",
 				"encoding/asn1", "encoding/base64", "encoding/binary", "encoding/hex", "encoding/json", "encoding/pem",
-				"errors", "fmt", "hash", "net/url", "os", "regexp", "strconv", "strings", "time", "unicode", "unicode/utf8",
+				"errors", "fmt", "hash", "io", "net/url", "os", "regexp", "strconv", "strings", "time", "unicode", "unicode/utf8",
 			},
 		},
 	})

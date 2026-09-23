@@ -79,38 +79,58 @@ func SignatureKindOf(obj Object) (SignatureKind, error) {
 // bytes before one are no signature — ends with the matching footer
 // line with nothing but whitespace after it, and holds no other header
 // or footer line, so no decoder can find a block other than the one
-// the label names. It is the one reader of the frame; each kind's
-// decoder takes a signature whose frame passed.
+// the label names. It is the one reader of a signature's frame; each
+// kind's decoder takes a signature whose frame passed.
 func signatureFrame(sig []byte) (SignatureKind, error) {
-	if !bytes.HasPrefix(sig, []byte(armorBegin)) {
-		return "", errors.New("gitprov: the signature does not begin with an armor header line")
+	label, err := armorLabel(sig, "the signature")
+	if err != nil {
+		return "", err
 	}
-	line, _, _ := bytes.Cut(sig, []byte("\n"))
-	label, ok := bytes.CutSuffix(line[len(armorBegin):], []byte(armorClose))
-	if !ok {
-		return "", errors.New("gitprov: the signature's armor header line is malformed")
-	}
-	kind, ok := labelKinds[string(label)]
+	kind, ok := labelKinds[label]
 	if !ok {
 		return "", fmt.Errorf("gitprov: signature label %q names no signature kind", label)
 	}
-	// A header or footer line opens a line: the marker text within a
-	// line — an OpenPGP armor header may carry it — is no line.
-	if bytes.Count(sig, []byte("\n"+armorBegin)) != 0 {
-		return "", errors.New("gitprov: the signature holds more than one armor header line")
-	}
-	footer := []byte(armorEnd + string(label) + armorClose)
-	i := bytes.LastIndex(sig, footer)
-	if i < 0 || sig[i-1] != '\n' {
-		return "", errors.New("gitprov: the signature has no armor footer line matching its header")
-	}
-	if len(bytes.Trim(sig[i+len(footer):], asciiSpace)) != 0 {
-		return "", errors.New("gitprov: the signature carries bytes beside its armored block")
-	}
-	if bytes.Count(sig, []byte("\n"+armorEnd)) != 1 {
-		return "", errors.New("gitprov: the signature holds more than one armor footer line")
+	if err := oneArmoredBlock(sig, label, "the signature"); err != nil {
+		return "", err
 	}
 	return kind, nil
+}
+
+// armorLabel is the label of the armor header line the text begins
+// with; what names the text in an error.
+func armorLabel(text []byte, what string) (string, error) {
+	if !bytes.HasPrefix(text, []byte(armorBegin)) {
+		return "", fmt.Errorf("gitprov: %s does not begin with an armor header line", what)
+	}
+	line, _, _ := bytes.Cut(text, []byte("\n"))
+	label, ok := bytes.CutSuffix(line[len(armorBegin):], []byte(armorClose))
+	if !ok {
+		return "", fmt.Errorf("gitprov: %s's armor header line is malformed", what)
+	}
+	return string(label), nil
+}
+
+// oneArmoredBlock holds the text to exactly one armored block under
+// the label its header line states: no other header or footer line —
+// a header or footer line opens a line, and the marker text within a
+// line, which an OpenPGP armor header may carry, is no line — the
+// matching footer line last, nothing but ASCII whitespace after it.
+func oneArmoredBlock(text []byte, label, what string) error {
+	if bytes.Count(text, []byte("\n"+armorBegin)) != 0 {
+		return fmt.Errorf("gitprov: %s holds more than one armor header line", what)
+	}
+	footer := []byte(armorEnd + label + armorClose)
+	i := bytes.LastIndex(text, footer)
+	if i < 0 || text[i-1] != '\n' {
+		return fmt.Errorf("gitprov: %s has no armor footer line matching its header", what)
+	}
+	if len(bytes.Trim(text[i+len(footer):], asciiSpace)) != 0 {
+		return fmt.Errorf("gitprov: %s carries bytes beside its armored block", what)
+	}
+	if bytes.Count(text, []byte("\n"+armorEnd)) != 1 {
+		return fmt.Errorf("gitprov: %s holds more than one armor footer line", what)
+	}
+	return nil
 }
 
 // asciiSpace is the whitespace admitted after the footer line: ASCII,

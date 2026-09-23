@@ -216,11 +216,6 @@ func TestParsePinnedKeySSH(t *testing.T) {
 			t.Fatalf("ParsePinnedKey(sigstore) = %v", err)
 		}
 	})
-	t.Run("an OpenPGP key has no parser yet", func(t *testing.T) {
-		if _, err := gitprov.ParsePinnedKey(gitprov.OpenPGP, "-----BEGIN PGP PUBLIC KEY BLOCK-----"); err == nil || !strings.Contains(err.Error(), "no verifier for a openpgp key") {
-			t.Fatalf("ParsePinnedKey(openpgp) = %v", err)
-		}
-	})
 }
 
 // certLine is an OpenSSH certificate for the key, signed by a fresh

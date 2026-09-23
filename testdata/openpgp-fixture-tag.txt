@@ -1,0 +1,13 @@
+object e4e9e7bb8e1d71ba9014f6fd9a31b13ffb8b8a16
+type commit
+tag v1.0.0
+tagger gitprov fixture <fixture@gitprov.invalid> 1790164800 +0000
+
+gitprov openpgp fixture tag
+-----BEGIN PGP SIGNATURE-----
+
+iHUEABYKAB0WIQSR7f6hxmQ+pk7Gk1FupZFPLa3oFgUCarP8qwAKCRBupZFPLa3o
+FqYlAQCgy9zZrrmAGJRFsxNfCmhQ3jtLrTXAO3YVH1rLkXltZgD/S3ypfCnDxAHz
+N5JbrWLS0auVOqY52/VRHGYsTkisNQE=
+=jiw1
+-----END PGP SIGNATURE-----

@@ -87,12 +87,6 @@ func TestVerifyPinnedSSHFixtures(t *testing.T) {
 			t.Fatalf("VerifyPinned(sigstore) = %v, want ErrSignatureKind", err)
 		}
 	})
-	t.Run("an OpenPGP signature has no verifier yet", func(t *testing.T) {
-		if _, err := VerifyPinned(commitSignedWith(t, []byte(pgpArmor)), PinnedSSH(t, ed)); err == nil ||
-			!strings.Contains(err.Error(), "no verifier for a openpgp signature") {
-			t.Fatalf("VerifyPinned(openpgp) = %v, want no-verifier error", err)
-		}
-	})
 	t.Run("an invalid descriptor fails closed", func(t *testing.T) {
 		if _, err := VerifyPinned(Object{Kind: "blob", Format: SHA1, Raw: tag.Raw}, PinnedSSH(t, ed)); err == nil ||
 			!strings.Contains(err.Error(), "unknown object kind") {
