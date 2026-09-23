@@ -52,3 +52,21 @@ Expected verified identity of the positive fixture (frozen in
 
 Re-capture (re-sign + re-fetch root, `rekorMode=offline`) if a
 gitsign/sigstore-go bump requires it, and update the expected values.
+
+## SSH-signed fixtures
+
+Real objects git 2.55 wrote and OpenSSH signed (`gpg.format=ssh`),
+made 2026-09-23 by the author in a throwaway repository with keys
+made for the purpose and discarded; no secret material, no
+third-party material. `git verify-commit` and `git verify-tag`
+report a good signature on each under the matching key.
+
+- `ssh-fixture-commit.txt`: an empty commit signed by the Ed25519
+  key `ssh-fixture-key.pub` (fingerprint
+  `SHA256:cuQ/ZG8mqAef7X0GZ19RH5baTiwTVg76NePyXAKPBfM`).
+- `ssh-fixture-tag.txt`: the annotated tag `v1.0.0` of that commit,
+  signed by the same key.
+- `ssh-fixture-rsa-tag.txt`: the annotated tag `v1.0.1` of that
+  commit, signed by the 2048-bit RSA key `ssh-fixture-rsa-key.pub`
+  (fingerprint `SHA256:qJf90eocttnD82cEmd3HjozFS3VFv2VfFEZPKsGOxRc`)
+  in the rsa-sha2-512 form ssh-keygen writes.

@@ -22,6 +22,7 @@ require (
 	github.com/sigstore/sigstore v1.10.8
 	github.com/sigstore/sigstore-go v1.2.1
 	github.com/transparency-dev/formats v0.1.1
+	golang.org/x/crypto v0.56.0
 	golang.org/x/mod v0.40.0
 	google.golang.org/protobuf v1.36.11
 	pgregory.net/rapid v1.3.0
@@ -171,7 +172,6 @@ require (
 	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect

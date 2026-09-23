@@ -1,0 +1,12 @@
+object b79a99407e833a40486d6a1a4240a464b37ae29e
+type commit
+tag v1.0.0
+tagger gitprov fixture <fixture@gitprov.invalid> 1790164800 +0000
+
+gitprov ssh fixture tag
+-----BEGIN SSH SIGNATURE-----
+U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgN9f6x59XQMA8O5vS/bHMB3ZPZe
+gwILJ4lYrbmUifW3AAAAADZ2l0AAAAAAAAAAZzaGE1MTIAAABTAAAAC3NzaC1lZDI1NTE5
+AAAAQIDPucITdnm45XFKNENgNMU1qEly2R5KIG6nf/egpo4t+JWZPHvoMuoua6E7rgb6ra
+tFkDdf4cQnXj+fgwqscw0=
+-----END SSH SIGNATURE-----

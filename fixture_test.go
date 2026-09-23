@@ -3,7 +3,6 @@ package gitprov
 import (
 	"bytes"
 	"crypto/x509"
-	"os"
 	"testing"
 
 	gitsign "github.com/sigstore/gitsign/pkg/git"
@@ -24,11 +23,8 @@ const (
 
 func loadEmbeddedFixture(t *testing.T) (raw []byte, tr *TrustedRoot) {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/gitsign-fixture-commit.txt")
-	if err != nil {
-		t.Fatalf("read fixture commit: %v", err)
-	}
-	tr, err = LoadTrustedRoot("testdata/gitsign-fixture-trusted-root.json")
+	raw = readFixture(t, "gitsign-fixture-commit.txt")
+	tr, err := LoadTrustedRoot("testdata/gitsign-fixture-trusted-root.json")
 	if err != nil {
 		t.Fatalf("load fixture trusted root: %v", err)
 	}

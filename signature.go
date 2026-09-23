@@ -135,6 +135,11 @@ func sigstoreSignature(sig []byte) ([]byte, error) {
 	if blk == nil {
 		return nil, errors.New("gitprov: the sigstore signature's body does not decode as a PEM block")
 	}
+	// The armor is base64 between the frame lines and nothing else:
+	// a header line within it is no armor gitsign writes.
+	if len(blk.Headers) != 0 {
+		return nil, errors.New("gitprov: the sigstore signature's armor carries header lines")
+	}
 	return blk.Bytes, nil
 }
 

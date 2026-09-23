@@ -370,3 +370,103 @@ bindings {
   role: BINDING_ROLE_TESTS
   shape_hash: "9824f1332f79f31c67224a53fd184d9bd3999fe944c362c58201a8cd1a649dda"
 }
+
+bindings {
+  requirement_id: "REQ-verify-pinned-key"
+  content_hash: "90167a7d24992ca42809d19a6bffa70193ea47ee15f3f92c74bcc8e47ca25220"
+  source_hash: "956371e9136cb00199697f94f51032630cf8d4fea7ffee5ddb7b7694a4a806fe"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.VerifyPinned"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "2e83072548baf69359e78d3d1e020fc1ca4f6c50a2e5e5da536f7c7703131b8e"
+}
+
+bindings {
+  requirement_id: "REQ-verify-pinned-key"
+  content_hash: "90167a7d24992ca42809d19a6bffa70193ea47ee15f3f92c74bcc8e47ca25220"
+  source_hash: "956371e9136cb00199697f94f51032630cf8d4fea7ffee5ddb7b7694a4a806fe"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.verifySSH"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "7978960204643a59e8f013fd2b534ee65649a0d29feb56eaa78293e35e2632b1"
+}
+
+bindings {
+  requirement_id: "REQ-verify-pinned-key"
+  content_hash: "90167a7d24992ca42809d19a6bffa70193ea47ee15f3f92c74bcc8e47ca25220"
+  source_hash: "956371e9136cb00199697f94f51032630cf8d4fea7ffee5ddb7b7694a4a806fe"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.ParsePinnedKey"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "a11d6c09ce912755072765644e31c37cb2b0cfcccf7c2097d3343cecff18d827"
+}
+
+bindings {
+  requirement_id: "REQ-verify-pinned-key"
+  content_hash: "90167a7d24992ca42809d19a6bffa70193ea47ee15f3f92c74bcc8e47ca25220"
+  source_hash: "956371e9136cb00199697f94f51032630cf8d4fea7ffee5ddb7b7694a4a806fe"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.parseSSHKey"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "d4eee178240aa8060bc83b00d14c5ce66f0a23b54fe79121dd3b7a3f0823791c"
+}
+
+bindings {
+  requirement_id: "REQ-verify-pinned-key"
+  content_hash: "90167a7d24992ca42809d19a6bffa70193ea47ee15f3f92c74bcc8e47ca25220"
+  source_hash: "956371e9136cb00199697f94f51032630cf8d4fea7ffee5ddb7b7694a4a806fe"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyPinnedSSHFixtures"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "28f8944d37d06cd3f82140cdf7b88e5660437b153995d7419b471e1f6b4aa56d"
+}
+
+bindings {
+  requirement_id: "REQ-verify-pinned-key"
+  content_hash: "90167a7d24992ca42809d19a6bffa70193ea47ee15f3f92c74bcc8e47ca25220"
+  source_hash: "956371e9136cb00199697f94f51032630cf8d4fea7ffee5ddb7b7694a4a806fe"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyPinnedSSHShapes"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "783c8db5c041a0c9f8adfabd1607704966c27fcccb8397cbe875ff8a1212f6f1"
+}
+
+bindings {
+  requirement_id: "REQ-verify-pinned-key"
+  content_hash: "90167a7d24992ca42809d19a6bffa70193ea47ee15f3f92c74bcc8e47ca25220"
+  source_hash: "956371e9136cb00199697f94f51032630cf8d4fea7ffee5ddb7b7694a4a806fe"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestParsePinnedKeySSH"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "ce893945abc59c286a9cf488a7da90c801b0253abb6d465ced47688d192e2fa2"
+}
+
+bindings {
+  requirement_id: "REQ-verify-pinned-key"
+  content_hash: "90167a7d24992ca42809d19a6bffa70193ea47ee15f3f92c74bcc8e47ca25220"
+  source_hash: "956371e9136cb00199697f94f51032630cf8d4fea7ffee5ddb7b7694a4a806fe"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyPinnedSSHProperty"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "ddf5eb27bb1055f043407f420a8b92e11dfc7e68a23c7ca3d3559a271ef13a6d"
+}
+
+bindings {
+  requirement_id: "REQ-verify-signature-kind"
+  content_hash: "a2d148afec3fbfb356fb712d0c1753dabf26b87eb4dc52bd350e487e9089c4a7"
+  source_hash: "142ee8476edbc1ff0b366b1611fa8ea2b0d299e8579b4ce5bfd73ad61e044c24"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyPinnedSSHFixtures"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "28f8944d37d06cd3f82140cdf7b88e5660437b153995d7419b471e1f6b4aa56d"
+}
+
+bindings {
+  requirement_id: "REQ-verify-raw-bytes"
+  content_hash: "4d83710507981ae90ed95a40f5dd4f8c182ff87931ce0a9ea38e720e92c7bbe6"
+  source_hash: "7b4ce861733488d769a9b558c7e840d5f56dcf9fc91fd6d6ebd53023514b6bf1"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestVerifyPinnedSSHProperty"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "ddf5eb27bb1055f043407f420a8b92e11dfc7e68a23c7ca3d3559a271ef13a6d"
+}

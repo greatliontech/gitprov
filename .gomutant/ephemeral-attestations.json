@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "attestations": [
+    {
+      "editDigest": "7a43e8071bcca5765d1838b1b587d5920f5f39c17d064126978c12f28f1c3645",
+      "rawEditDigest": "7a43e8071bcca5765d1838b1b587d5920f5f39c17d064126978c12f28f1c3645",
+      "files": [
+        "pinned.go"
+      ],
+      "testPkg": "github.com/greatliontech/gitprov",
+      "run": "TestVerifyPinnedSSHShapes",
+      "reason": "the pinned key is the one whose SHA-256 fingerprint equals the carried key's, both fingerprints taken over the key re-encoded after parsing, and every state Verify reads is in that encoding; so wherever the lookup succeeds the two are the same key and verifying with either is the same computation \u2014 the pinned key is named in the code to keep the trust flow explicit, and no input short of a SHA-256 collision distinguishes the mutant",
+      "commit": "60af73543f2e829f5296a5a3d35ed731b7fd1ea2",
+      "dirty": true
+    }
+  ]
+}

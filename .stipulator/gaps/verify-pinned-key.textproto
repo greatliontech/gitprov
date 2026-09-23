@@ -3,6 +3,6 @@
 
 requirement_id: "REQ-verify-pinned-key"
 reason: "the pinned-key arms are specced ahead of pb's pinned-key provenance plan"
-content_hash: "e109ad75e9dcc33e42150ac0ff1b87e140d220fa9a89083f9aea7cb895d00af8"
-source_hash: "424092b950fe4c06198d0027f1e4930233cccb8b54284257e944ec05b8d3df43"
+content_hash: "90167a7d24992ca42809d19a6bffa70193ea47ee15f3f92c74bcc8e47ca25220"
+source_hash: "956371e9136cb00199697f94f51032630cf8d4fea7ffee5ddb7b7694a4a806fe"
 lands { manual { condition: "pb's pinned-key provenance plan lands the arms" } }

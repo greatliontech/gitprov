@@ -174,8 +174,16 @@ verification the caller cannot request with transparency required.
 The verified outcome names the key's kind and fingerprint in place of
 a Fulcio identity, and every failure — no pinned key of the
 signature's kind, a signature by an unpinned key, a signature that
-does not verify — fails closed as REQ-verify-fail-closed says. Lands:
-pb's pinned-key provenance plan.
+does not verify — fails closed as REQ-verify-fail-closed says. An SSH
+signature is OpenSSH's signature envelope in the `git` namespace,
+version 1, its hash sha256 or sha512, its reserved field ignored,
+the signed blob carrying it empty as OpenSSH verifies; decoded
+strictly — no armor header lines, no bytes beside the envelope,
+none after the signature blob but a FIDO key's flags and counter,
+asserting user presence — and never in the SHA-1 RSA form; a pinned
+SSH key is one OpenSSH public key line naming no certificate, no
+DSA key and no RSA key under 1024 bits.
+Lands: the OpenPGP arm with pb's pinned-key provenance plan.
 
 ## Trusted root
 

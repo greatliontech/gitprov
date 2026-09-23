@@ -155,6 +155,13 @@ func TestSigstorePathsRefuseOtherKinds(t *testing.T) {
 			t.Fatalf("Verify = %v, want unknown-label error", err)
 		}
 	})
+	t.Run("header lines in the armor", func(t *testing.T) {
+		armored := pem.EncodeToMemory(&pem.Block{Type: sigstoreLabel, Headers: map[string]string{"Foo": "bar"}, Bytes: der})
+		if _, err := Verify(ctx, commitSignedWith(t, armored), id, fixtureTr, false); err == nil ||
+			!strings.Contains(err.Error(), "armor carries header lines") {
+			t.Fatalf("Verify(headers) = %v, want header-lines error", err)
+		}
+	})
 	t.Run("no block under HasEmbeddedRekor", func(t *testing.T) {
 		if _, err := HasEmbeddedRekor(commitSignedWith(t, []byte("MIIBCg==\n"))); err == nil ||
 			!strings.Contains(err.Error(), "does not begin with an armor header line") {

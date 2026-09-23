@@ -6,7 +6,9 @@ annotated-tag bytes, cosign's bundle or simple-signing envelope over a
 manifest digest — Fulcio identity extraction and policy matching, and
 transparency proofs, embedded or carried, with the leaf judged at a
 signed time — all verified against a caller-pinned trusted root, with
-no network access ever.
+no network access ever. Beside them, SSH signatures over git objects
+verified against exactly the public keys a caller pins, offline and
+without transparency; the OpenPGP arm is not yet built.
 
 The contract lives in `docs/specs/verification.md`.
 
