@@ -13,6 +13,11 @@ is fixed by the dependency versions pinned beside this record and
 by the module's floor at the standard library's patched release;
 the check runs on the current Go release so later patches reach it.
 
-Until upstream drops the package, the check exits red on this one
-advisory. The exposure is stated, not silenced: no suppression is
-configured, so a new advisory is never masked by the standing one.
+Until upstream drops the package, a standing exception names this
+one advisory by id in `vulncheck.exceptions`, with an expiry date
+that forces its re-examination; internal/vulnexcept judges the scan
+against it. The exposure is stated, not silenced: the exception
+excuses no other advisory, an expired exception fails the check, and
+so does one whose advisory the scan no longer reports — the day
+upstream drops the package, the check goes red until the exception
+is removed and this issue closed.

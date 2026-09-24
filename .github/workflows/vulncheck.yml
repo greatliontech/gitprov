@@ -22,4 +22,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
-      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      # The scan's JSON stream judged against the standing exceptions
+      # (vulncheck.exceptions): an advisory reaching this module's
+      # code fails unless an unexpired exception names it, and an
+      # expired or stale exception fails on its own.
+      - run: scripts/vulncheck.sh

@@ -1,0 +1,5 @@
+# Standing exceptions for the vulnerability check, judged by
+# internal/vulnexcept: `<id> until <YYYY-MM-DD> <reason>`. An
+# expired exception, or one whose advisory the scan no longer reports,
+# fails the check.
+GO-2026-5932 until 2026-12-31 x/crypto/openpgp reached only through sigstore's modules, which have no fixed version; docs/issues/vulncheck-openpgp-advisory.md

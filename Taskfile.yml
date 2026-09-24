@@ -21,3 +21,8 @@ tasks:
     desc: Tidy the module graph
     cmds:
       - go mod tidy
+
+  vulncheck:
+    desc: Scan the module graph for advisories, judged against vulncheck.exceptions
+    cmds:
+      - scripts/vulncheck.sh
