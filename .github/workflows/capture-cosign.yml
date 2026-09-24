@@ -1,0 +1,41 @@
+# Run by hand, once per capture: pushes a throwaway image to this
+# owner's ghcr.io package gitprov-cosign-capture, signs it keyless as
+# this workflow's OIDC identity — the Fulcio certificate and the
+# public transparency-log entry name this repository and workflow —
+# and uploads every carrier and the registry's answers as the
+# artifact `cosign-capture`, for scripts/capture-cosign.sh's vectors
+# to land under testdata (testdata/NOTICE.md).
+name: capture-cosign
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sigstore/cosign-installer@v4.1.2
+        with:
+          cosign-release: v3.0.6
+      - uses: imjasonh/setup-crane@v0.4
+      - run: crane auth login ghcr.io -u "$GITHUB_ACTOR" -p "$GITHUB_TOKEN"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: scripts/capture-cosign.sh
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/gitprov-cosign-capture
+          OUT: capture
+          IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/capture-cosign.yml@${{ github.ref }}
+          ISSUER: https://token.actions.githubusercontent.com
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cosign-capture
+          path: capture
+          if-no-files-found: error
