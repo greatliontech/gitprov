@@ -23,8 +23,8 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-raw-bytes"
-  content_hash: "4d83710507981ae90ed95a40f5dd4f8c182ff87931ce0a9ea38e720e92c7bbe6"
-  source_hash: "7b4ce861733488d769a9b558c7e840d5f56dcf9fc91fd6d6ebd53023514b6bf1"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.splitSignature"
   role: BINDING_ROLE_IMPLEMENTS
@@ -33,8 +33,8 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-raw-bytes"
-  content_hash: "4d83710507981ae90ed95a40f5dd4f8c182ff87931ce0a9ea38e720e92c7bbe6"
-  source_hash: "7b4ce861733488d769a9b558c7e840d5f56dcf9fc91fd6d6ebd53023514b6bf1"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.TestSplitSignature"
   role: BINDING_ROLE_TESTS
@@ -43,8 +43,8 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-raw-bytes"
-  content_hash: "4d83710507981ae90ed95a40f5dd4f8c182ff87931ce0a9ea38e720e92c7bbe6"
-  source_hash: "7b4ce861733488d769a9b558c7e840d5f56dcf9fc91fd6d6ebd53023514b6bf1"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.TestVerify_EmbeddedFixture"
   role: BINDING_ROLE_TESTS
@@ -233,8 +233,8 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-raw-bytes"
-  content_hash: "4d83710507981ae90ed95a40f5dd4f8c182ff87931ce0a9ea38e720e92c7bbe6"
-  source_hash: "7b4ce861733488d769a9b558c7e840d5f56dcf9fc91fd6d6ebd53023514b6bf1"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.TestSplitSignatureRoundTripsRawBytes"
   role: BINDING_ROLE_TESTS
@@ -352,26 +352,6 @@ bindings {
 }
 
 bindings {
-  requirement_id: "REQ-verify-raw-bytes"
-  content_hash: "4d83710507981ae90ed95a40f5dd4f8c182ff87931ce0a9ea38e720e92c7bbe6"
-  source_hash: "7b4ce861733488d769a9b558c7e840d5f56dcf9fc91fd6d6ebd53023514b6bf1"
-  backend: "go"
-  symbol: "github.com/greatliontech/gitprov.rawBytesSplit"
-  role: BINDING_ROLE_IMPLEMENTS
-  shape_hash: "b039bcefaab240b7daa2b302f237f7bce763b0842d3e5b1171363b52fefed01c"
-}
-
-bindings {
-  requirement_id: "REQ-verify-raw-bytes"
-  content_hash: "4d83710507981ae90ed95a40f5dd4f8c182ff87931ce0a9ea38e720e92c7bbe6"
-  source_hash: "7b4ce861733488d769a9b558c7e840d5f56dcf9fc91fd6d6ebd53023514b6bf1"
-  backend: "go"
-  symbol: "github.com/greatliontech/gitprov.TestSplitRefusesLossyObjects"
-  role: BINDING_ROLE_TESTS
-  shape_hash: "9824f1332f79f31c67224a53fd184d9bd3999fe944c362c58201a8cd1a649dda"
-}
-
-bindings {
   requirement_id: "REQ-verify-pinned-key"
   content_hash: "8ed3709c04d8b17aa043bee9892f2f5ea56639d9ae9b2576e030f107492bcfbd"
   source_hash: "9eae5f79701245e5c3840b5f194bc17220131f7abedfeb65d348259efe9b99fe"
@@ -463,8 +443,8 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-raw-bytes"
-  content_hash: "4d83710507981ae90ed95a40f5dd4f8c182ff87931ce0a9ea38e720e92c7bbe6"
-  source_hash: "7b4ce861733488d769a9b558c7e840d5f56dcf9fc91fd6d6ebd53023514b6bf1"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.TestVerifyPinnedSSHProperty"
   role: BINDING_ROLE_TESTS
@@ -563,10 +543,90 @@ bindings {
 
 bindings {
   requirement_id: "REQ-verify-raw-bytes"
-  content_hash: "4d83710507981ae90ed95a40f5dd4f8c182ff87931ce0a9ea38e720e92c7bbe6"
-  source_hash: "7b4ce861733488d769a9b558c7e840d5f56dcf9fc91fd6d6ebd53023514b6bf1"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
   backend: "go"
   symbol: "github.com/greatliontech/gitprov.TestVerifyPinnedOpenPGPProperty"
   role: BINDING_ROLE_TESTS
   shape_hash: "4231ae7f81e58dc2dafefd6240d35a4ba22ae3b576d01842960174b039fe3cb4"
+}
+
+bindings {
+  requirement_id: "REQ-verify-raw-bytes"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestSplitKeepsEveryByte"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "949204d620fc020fa725056800a7f1998814912cdb750c5e0a35f3ba28bc0c7f"
+}
+
+bindings {
+  requirement_id: "REQ-verify-raw-bytes"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestRemoveSignatureHeadersAsGit"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "8bbd36fc69de9853441f404c9b2ba7a4cf45407f969399b24df29bbe97282d9c"
+}
+
+bindings {
+  requirement_id: "REQ-verify-raw-bytes"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.splitCommit"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "ffccf9df69233374097a5b9177cde71c2bdc8227f6fe4cc84e63251f63fa4933"
+}
+
+bindings {
+  requirement_id: "REQ-verify-raw-bytes"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.splitTag"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "e70971c7cf6355f7c0874d01887c41c93863cab3df5ddbd863f826a7d553cd8b"
+}
+
+bindings {
+  requirement_id: "REQ-verify-raw-bytes"
+  content_hash: "aad8d86366b32b52c5528aa7b0ade28bc2a2c5069c511d3483000d38a2a4d8a5"
+  source_hash: "905f37fe9c464bdda9f12114f28eae69e97d9c1e48be8b64d4d79255f676066f"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.removeSignatureHeaders"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "41153bbc8a85bb609c7c7c9dc1325db4adfb490b700fd3b0b64fee76cc5718f7"
+}
+
+bindings {
+  requirement_id: "REQ-verify-signature-extraction"
+  content_hash: "a827b9162ca2d74248d1ce76d8926978fab6e7016fe2609fb50c0393e7816cac"
+  source_hash: "5718f723e45846c74faa98058a4a0fd4aadcb7c1766c2e31bb9d1bbc965303d6"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.splitCommit"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "ffccf9df69233374097a5b9177cde71c2bdc8227f6fe4cc84e63251f63fa4933"
+}
+
+bindings {
+  requirement_id: "REQ-verify-signature-extraction"
+  content_hash: "a827b9162ca2d74248d1ce76d8926978fab6e7016fe2609fb50c0393e7816cac"
+  source_hash: "5718f723e45846c74faa98058a4a0fd4aadcb7c1766c2e31bb9d1bbc965303d6"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.removeSignatureHeaders"
+  role: BINDING_ROLE_IMPLEMENTS
+  shape_hash: "41153bbc8a85bb609c7c7c9dc1325db4adfb490b700fd3b0b64fee76cc5718f7"
+}
+
+bindings {
+  requirement_id: "REQ-verify-signature-extraction"
+  content_hash: "a827b9162ca2d74248d1ce76d8926978fab6e7016fe2609fb50c0393e7816cac"
+  source_hash: "5718f723e45846c74faa98058a4a0fd4aadcb7c1766c2e31bb9d1bbc965303d6"
+  backend: "go"
+  symbol: "github.com/greatliontech/gitprov.TestRemoveSignatureHeadersAsGit"
+  role: BINDING_ROLE_TESTS
+  shape_hash: "8bbd36fc69de9853441f404c9b2ba7a4cf45407f969399b24df29bbe97282d9c"
 }

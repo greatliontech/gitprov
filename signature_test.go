@@ -79,12 +79,12 @@ func TestSignatureKindOf(t *testing.T) {
 		})
 	}
 	t.Run("a non-ASCII space after the footer", func(t *testing.T) {
-		// Read at the frame: a commit's signature header cannot carry
-		// one, the split stripping Unicode whitespace from its
-		// continuation lines and the object then refused as lossy.
-		if _, err := signatureFrame(append(append([]byte(nil), sigstore...), "\u00a0\n"...)); err == nil ||
+		// The split hands the header's bytes on whole, the space
+		// among them.
+		obj := Object{Kind: Commit, Format: SHA1, Raw: mustJoin(t, minimalCommitPayload(), append(append([]byte(nil), sigstore...), "\u00a0\n"...))}
+		if _, err := SignatureKindOf(obj); err == nil ||
 			!strings.Contains(err.Error(), "beside its armored block") {
-			t.Fatalf("signatureFrame(non-ASCII space) = %v, want beside-the-block error", err)
+			t.Fatalf("SignatureKindOf(non-ASCII space) = %v, want beside-the-block error", err)
 		}
 	})
 	t.Run("an unsigned object has no kind", func(t *testing.T) {
@@ -173,12 +173,12 @@ func TestSigstorePathsRefuseOtherKinds(t *testing.T) {
 		// fixture's whole armored signature: the block's bytes are no
 		// CMS, and the verifier must not find the signature within them
 		// and verify that instead.
-		cs, err := gitsign.SplitCommit(strings.NewReader(string(raw)))
+		payload, sig, err := splitSignature(Object{Kind: Commit, Format: SHA1, Raw: raw})
 		if err != nil {
 			t.Fatal(err)
 		}
-		nested := block(sigstoreLabel, append([]byte("this is not CMS DER at all\n"), cs.Gpgsig...))
-		obj := Object{Kind: Commit, Format: SHA1, Raw: mustJoin(t, cs.Payload, nested)}
+		nested := block(sigstoreLabel, append([]byte("this is not CMS DER at all\n"), sig...))
+		obj := Object{Kind: Commit, Format: SHA1, Raw: mustJoin(t, payload, nested)}
 		if _, err := Verify(ctx, obj, id, fixtureTr, false); err == nil || errors.Is(err, ErrSignatureKind) {
 			t.Fatalf("Verify(nested armor) = %v, want a parse failure", err)
 		}

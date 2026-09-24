@@ -1,0 +1,14 @@
+object fa28a46da6f93c4d4a64de947efecd9161447b41
+type commit
+tag v1.0.0
+tagger gitprov fixture <fixture@gitprov.invalid> 1790164800 +0000
+
+gitprov verbatim fixture tag
+
+a carriage return kept as content
+-----BEGIN SSH SIGNATURE-----
+U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgOUFqInl2m2TSul4KZmmVrNu7tS
+D2wA4dMY3pZ92vo4AAAAADZ2l0AAAAAAAAAAZzaGE1MTIAAABTAAAAC3NzaC1lZDI1NTE5
+AAAAQNDlimzk6pYiQQG/hGzQ4JfhEGtxwoPTZOb0CiczszXRv4SCdPOMHcmC68OLA/nSU1
+60kcapPnTDE1Jli0KuLgQ=
+-----END SSH SIGNATURE-----

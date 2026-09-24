@@ -71,6 +71,24 @@ report a good signature on each under the matching key.
   (fingerprint `SHA256:qJf90eocttnD82cEmd3HjozFS3VFv2VfFEZPKsGOxRc`)
   in the rsa-sha2-512 form ssh-keygen writes.
 
+## Verbatim SSH-signed fixtures
+
+Real objects git 2.55 wrote with `--cleanup=verbatim` and OpenSSH
+signed (`gpg.format=ssh`), made 2026-09-24 by the author in a
+throwaway repository with a key made for the purpose and discarded;
+no secret material, no third-party material. Each carries bytes a
+line-reading split loses, and `git verify-commit` and `git
+verify-tag` report a good signature on each under the key
+`ssh-verbatim-key.pub` (Ed25519, fingerprint
+`SHA256:AenzIvrZ1V5M482aTO59gPD791VpGO5R7l2MmGDEg9U`).
+
+- `ssh-verbatim-return-commit.txt`: an empty commit whose message
+  lines end in a carriage return before the newline.
+- `ssh-verbatim-unterminated-commit.txt`: an empty commit whose
+  final message line has no newline.
+- `ssh-verbatim-return-tag.txt`: the annotated tag `v1.0.0` of the
+  first commit, its message lines ending in a carriage return.
+
 ## OpenPGP-signed fixtures
 
 Real objects git 2.55 wrote and GnuPG 2.4.9 signed, made 2026-09-23

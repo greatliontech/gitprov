@@ -61,7 +61,11 @@ other — is ever queried.
 **REQ-verify-raw-bytes** (invariant): Verification MUST consume raw
 object bytes and split them with git-core-faithful parsing; a payload
 reconstructed from a decoded object structure is rejected territory —
-any normalization would verify bytes the origin never signed.
+any normalization would verify bytes the origin never signed. A tag
+in whose headers a third `gpgsig` or `gpgsig-sha256` header follows
+two such header blocks, each ended by a line that neither continues
+it nor opens with `gpgsig`, is one whose reading git leaves
+undefined, and fails verification.
 
 **REQ-verify-signature-extraction** (behavior): The signature MUST be
 taken from the location that signs the form of the bytes in hand, per

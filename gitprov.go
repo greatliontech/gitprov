@@ -31,14 +31,16 @@
 //
 // Mechanism notes:
 //
-//   - Certificate-chain verification uses gitsign's public pkg/git:
-//     SplitCommit/SplitTag for raw-byte splitting (never a library
-//     object re-encode), trusted only where their join reproduces the
-//     raw bytes — their line reading drops a carriage return,
-//     normalizes an indented signature line and completes a final
-//     line, and an object so rebuilt is refused (object.go) — and
-//     CertVerifier over Fulcio pools built from the pinned trusted
-//     root.
+//   - The split of an object into the payload a signature covers and
+//     the signature is gitprov's own port of git's rules over the raw
+//     bytes (object.go: parse_buffer_signed_by_header for a commit,
+//     parse_signature and remove_signature for a tag), never a
+//     library object re-encode and never a line reader rebuilding the
+//     payload — one that drops a carriage return or completes a final
+//     line verifies bytes the origin never signed, and refuses what
+//     git verifies. Certificate-chain verification uses gitsign's
+//     public pkg/git CertVerifier over Fulcio pools built from the
+//     pinned trusted root.
 //   - The offline Rekor inclusion check cannot use gitsign's own
 //     verifier: pkg/rekor.Client.VerifyInclusion is hard-wired to
 //     cosign's TUF/network trusted-root global, and its reconstruction
@@ -54,9 +56,7 @@
 //     cannot consume CMS, so the git path's chain and Rekor binding
 //     stay gitsign's and the port's).
 //
-// Dependency floor: gitsign v0.16.0 — CVE-2026-44310 (empty-cert PKCS7)
-// was fixed in v0.15.0, and v0.16.0 carries the raw-bytes
-// SplitCommit/SplitTag path (CVE-2026-44309) this package's raw-bytes
-// contract requires. Re-audit rekoroid.go against upstream on any
+// Dependency floor: gitsign v0.15.0, where CVE-2026-44310 (empty-cert
+// PKCS7) was fixed. Re-audit rekoroid.go against upstream on any
 // gitsign bump.
 package gitprov

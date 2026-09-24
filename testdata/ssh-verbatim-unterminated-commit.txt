@@ -1,0 +1,12 @@
+tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904
+parent fa28a46da6f93c4d4a64de947efecd9161447b41
+author gitprov fixture <fixture@gitprov.invalid> 1790164800 +0000
+committer gitprov fixture <fixture@gitprov.invalid> 1790164800 +0000
+gpgsig -----BEGIN SSH SIGNATURE-----
+ U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgOUFqInl2m2TSul4KZmmVrNu7tS
+ D2wA4dMY3pZ92vo4AAAAADZ2l0AAAAAAAAAAZzaGE1MTIAAABTAAAAC3NzaC1lZDI1NTE5
+ AAAAQJCuCaWnEOGzEHYbh1sWDzNbZq0ZyY1IxPFzTVeLk2wHiMlxYnwyr22cydZ33lFyoD
+ g+2Cc6WB5r2/Z2lXd75wo=
+ -----END SSH SIGNATURE-----
+
+gitprov verbatim fixture, its final line unterminated

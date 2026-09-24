@@ -1,7 +1,6 @@
 package gitprov
 
 import (
-	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/base64"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/github/smimesign/ietf-cms/protocol"
 	"github.com/google/go-cmp/cmp"
-	gitsign "github.com/sigstore/gitsign/pkg/git"
 	"github.com/sigstore/rekor/pkg/generated/models"
 )
 
@@ -31,15 +29,12 @@ func TestRekoroidGoldenFidelity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cs, err := gitsign.SplitCommit(bytes.NewReader(raw))
+	_, sig, err := splitSignature(Object{Kind: Commit, Format: SHA1, Raw: raw})
 	if err != nil {
 		t.Fatalf("split commit: %v", err)
 	}
-	if cs.Gpgsig == nil {
-		t.Fatal("vendored fixture commit has no gpgsig")
-	}
 
-	der, leaf := signerOf(t, cs.Gpgsig)
+	der, leaf := signerOf(t, sig)
 	si, err := parseCMS(der)
 	if err != nil {
 		t.Fatalf("parse CMS: %v", err)

@@ -1,11 +1,8 @@
 package gitprov
 
 import (
-	"bytes"
 	"crypto/x509"
 	"testing"
-
-	gitsign "github.com/sigstore/gitsign/pkg/git"
 )
 
 // The real-bytes fixtures under testdata: a genuine gitsign
@@ -37,11 +34,11 @@ func loadEmbeddedFixture(t *testing.T) (raw []byte, tr *TrustedRoot) {
 func fixtureSigLeaf(t *testing.T) (der []byte, leaf *x509.Certificate) {
 	t.Helper()
 	raw, _ := loadEmbeddedFixture(t)
-	cs, err := gitsign.SplitCommit(bytes.NewReader(raw))
+	_, sig, err := splitSignature(Object{Kind: Commit, Format: SHA1, Raw: raw})
 	if err != nil {
 		t.Fatalf("split fixture commit: %v", err)
 	}
-	return signerOf(t, cs.Gpgsig)
+	return signerOf(t, sig)
 }
 
 // signerOf decodes an armored sigstore signature to its DER and the
