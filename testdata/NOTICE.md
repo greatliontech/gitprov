@@ -83,17 +83,40 @@ the transparency log. No secret material, no third-party material.
 - `cosign-fixture-envelope-payload.json`: that layer's content, the
   simple-signing document naming the digest.
 - `cosign-fixture-trusted-root.json`: the trusted root sigstore's
-  TUF served at signing (`sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66`);
-  it names a Rekor v2 log (`log2025-1.rekor.sigstore.dev`) the
-  public signing configuration of the day did not offer, so no v2
-  entry is among these vectors.
+  TUF served at signing (`sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66`),
+  naming the v1 log and the Rekor v2 log `log2025-1.rekor.sigstore.dev`.
 
-Expected verified identity of both (frozen in `image_test.go`):
+A second image, digest
+`sha256:4818f02852957cd2e54cd1f6d6303e96792add0a0694049202551205d439a03d`,
+signed the same day the same way, its bundle signed under TUF's
+other signing configuration target `signing_config_rekor_v2.v0.2.json`
+(`SIGNING_CONFIG`), which names the v2 log with v1 as fallback — the
+default target of the day named the v1 log alone; `cosign verify`
+reports both of its carriers good under the identity below:
+
+- `cosign-fixture-v2-bundle.json`: the bundle referrer's layer, its
+  one entry in the Rekor v2 log: a `hashedrekord` 0.0.2 entry (log
+  index 123822350), no integrated time and no signed entry
+  timestamp, an inclusion proof under a checkpoint whose origin is
+  `log2025-1.rekor.sigstore.dev`, the checkpoint cosigned by three
+  witnesses beside the log; and one RFC 3161 timestamp from
+  `timestamp.sigstore.dev` at 2026-09-24T15:53:44Z, the signed time.
+- `cosign-fixture-v2-envelope-manifest.json` and
+  `cosign-fixture-v2-envelope-payload.json`: the legacy carrier, as
+  the first image's — a v1 `hashedrekord` bundle (log index
+  2941115595, integrated time 1790265244).
+
+Expected verified identity of all four (frozen in `image_test.go`):
 `Subject` = `nikolas@greatlion.tech`, `Issuer` =
-`https://accounts.google.com`; the bundle's leaf fingerprint
-`sha256:40c28d9006125604ab5a21be1231899c454653877418fc66a721ff21358bdd5c`,
-the envelope's
-`sha256:9196a33ad6d2f0e231a3a3449c981bb18170e24b5b48ad78e7107a2f265313a3`.
+`https://accounts.google.com`; the leaf fingerprints
+`sha256:40c28d9006125604ab5a21be1231899c454653877418fc66a721ff21358bdd5c`
+(v1 bundle),
+`sha256:9196a33ad6d2f0e231a3a3449c981bb18170e24b5b48ad78e7107a2f265313a3`
+(v1 envelope),
+`sha256:35f1107ff0a1ea1cad4ad7bba2c26bfebdc3d1177266663d4f2f35c3bd2e1f8e`
+(v2 bundle),
+`sha256:08f2e4da0d888cd9149514c6915b23bbccaa4103a1a4b364d82d64b4c14a0f64`
+(the second image's envelope).
 
 ## SSH-signed fixtures
 

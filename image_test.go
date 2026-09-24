@@ -13,9 +13,10 @@ import (
 	"github.com/greatliontech/gitprov/sigstoretest"
 )
 
-// The image fixtures are sigstoretest's synthetic sigstore: cosign's
-// shapes built from cosign's constants; the real captured vectors,
-// once present, prove the shapes against bytes cosign wrote.
+// The image fixtures are sigstoretest's synthetic sigstore, cosign's
+// shapes built from cosign's constants, and the captured vectors
+// under testdata, which prove the shapes against bytes cosign wrote
+// (TestVerifyImageCapturedVectors).
 
 const (
 	imageIdentity = "signer@example.com"
@@ -377,19 +378,21 @@ func TestHasImageTime(t *testing.T) {
 	}
 }
 
-// The captured vectors: an image cosign v3.1.3 signed keyless twice
-// (testdata/NOTICE.md), its bundle referrer and its legacy
-// simple-signing layer as the registry served them, verified against
-// the trusted root in force at signing — the identity, the digest,
-// each entry's index and its time as the signed time (the bundle's
-// timestamp names the same second, so which source the time is
-// taken from is the synthetic suite's to pin), and the leaf's
-// fingerprint as the sha256 of the carrier's certificate.
+// The captured vectors: two images cosign v3.1.3+dirty signed keyless
+// twice each (testdata/NOTICE.md) — the first's bundle entry in the
+// Rekor v1 log, the second's in the Rekor v2 log — their bundle
+// referrers and legacy simple-signing layers as the registry served
+// them, verified against the trusted root in force at signing: the
+// identity, the digest, each entry's index and the signed time — a
+// v1 entry's integrated time (its timestamp names the same second,
+// so which source the time is taken from is the synthetic suite's
+// to pin), a v2 entry's the timestamp's, the entry having none —
+// and the leaf's fingerprint as the sha256 of the carrier's
+// certificate.
 func TestVerifyImageCapturedVectors(t *testing.T) {
 	const (
 		identity = "nikolas@greatlion.tech"
 		issuer   = "https://accounts.google.com"
-		digest   = "sha256:facb5564762d06aa0d30bba81be04b6d078cd289cb861e864dafd36a85322f28"
 		rootDig  = "sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66"
 	)
 	tr, err := gitprov.LoadTrustedRoot("testdata/cosign-fixture-trusted-root.json")
@@ -399,61 +402,69 @@ func TestVerifyImageCapturedVectors(t *testing.T) {
 	if tr.Digest() != rootDig {
 		t.Fatalf("trusted root digest %s, want %s", tr.Digest(), rootDig)
 	}
-	bundle := gitprov.SigstoreBundle{JSON: fixtureBytes(t, "testdata/cosign-fixture-bundle.json")}
-	var manifest struct {
-		Layers []struct {
-			MediaType   string            `json:"mediaType"`
-			Annotations map[string]string `json:"annotations"`
-		} `json:"layers"`
-	}
-	if err := json.Unmarshal(fixtureBytes(t, "testdata/cosign-fixture-envelope-manifest.json"), &manifest); err != nil {
-		t.Fatal(err)
-	}
-	if len(manifest.Layers) != 1 || manifest.Layers[0].MediaType != "application/vnd.dev.cosign.simplesigning.v1+json" {
-		t.Fatalf("envelope manifest layers = %+v", manifest.Layers)
-	}
-	a := manifest.Layers[0].Annotations
-	envelope := gitprov.SimpleSigningEnvelope{
-		Payload:          fixtureBytes(t, "testdata/cosign-fixture-envelope-payload.json"),
-		Signature:        a["dev.cosignproject.cosign/signature"],
-		Certificate:      a["dev.sigstore.cosign/certificate"],
-		Chain:            a["dev.sigstore.cosign/chain"],
-		RekorBundle:      a["dev.sigstore.cosign/bundle"],
-		RFC3161Timestamp: a["dev.sigstore.cosign/rfc3161timestamp"],
+	envelopeOf := func(stem string) gitprov.SimpleSigningEnvelope {
+		var manifest struct {
+			Layers []struct {
+				MediaType   string            `json:"mediaType"`
+				Annotations map[string]string `json:"annotations"`
+			} `json:"layers"`
+		}
+		if err := json.Unmarshal(fixtureBytes(t, "testdata/"+stem+"-envelope-manifest.json"), &manifest); err != nil {
+			t.Fatal(err)
+		}
+		if len(manifest.Layers) != 1 || manifest.Layers[0].MediaType != "application/vnd.dev.cosign.simplesigning.v1+json" {
+			t.Fatalf("envelope manifest layers = %+v", manifest.Layers)
+		}
+		a := manifest.Layers[0].Annotations
+		return gitprov.SimpleSigningEnvelope{
+			Payload:          fixtureBytes(t, "testdata/"+stem+"-envelope-payload.json"),
+			Signature:        a["dev.cosignproject.cosign/signature"],
+			Certificate:      a["dev.sigstore.cosign/certificate"],
+			Chain:            a["dev.sigstore.cosign/chain"],
+			RekorBundle:      a["dev.sigstore.cosign/bundle"],
+			RFC3161Timestamp: a["dev.sigstore.cosign/rfc3161timestamp"],
+		}
 	}
 	policy := gitprov.Identity{Subject: identity, Issuer: issuer}
 	for _, tt := range []struct {
 		name        string
+		digest      string
 		carrier     gitprov.ImageCarrier
 		index, time int64
 		fingerprint string
 	}{
-		{"the bundle referrer", bundle, 2940469140, 1790262766, "sha256:40c28d9006125604ab5a21be1231899c454653877418fc66a721ff21358bdd5c"},
-		{"the legacy envelope", envelope, 2940477984, 1790262794, "sha256:9196a33ad6d2f0e231a3a3449c981bb18170e24b5b48ad78e7107a2f265313a3"},
+		{"the first image's bundle referrer, a Rekor v1 entry", "sha256:facb5564762d06aa0d30bba81be04b6d078cd289cb861e864dafd36a85322f28",
+			gitprov.SigstoreBundle{JSON: fixtureBytes(t, "testdata/cosign-fixture-bundle.json")},
+			2940469140, 1790262766, "sha256:40c28d9006125604ab5a21be1231899c454653877418fc66a721ff21358bdd5c"},
+		{"the first image's legacy envelope", "sha256:facb5564762d06aa0d30bba81be04b6d078cd289cb861e864dafd36a85322f28",
+			envelopeOf("cosign-fixture"),
+			2940477984, 1790262794, "sha256:9196a33ad6d2f0e231a3a3449c981bb18170e24b5b48ad78e7107a2f265313a3"},
+		{"the second image's bundle referrer, a Rekor v2 entry", "sha256:4818f02852957cd2e54cd1f6d6303e96792add0a0694049202551205d439a03d",
+			gitprov.SigstoreBundle{JSON: fixtureBytes(t, "testdata/cosign-fixture-v2-bundle.json")},
+			123822350, time.Date(2026, 9, 24, 15, 53, 44, 0, time.UTC).Unix(), "sha256:35f1107ff0a1ea1cad4ad7bba2c26bfebdc3d1177266663d4f2f35c3bd2e1f8e"},
+		{"the second image's legacy envelope", "sha256:4818f02852957cd2e54cd1f6d6303e96792add0a0694049202551205d439a03d",
+			envelopeOf("cosign-fixture-v2"),
+			2941115595, 1790265244, "sha256:08f2e4da0d888cd9149514c6915b23bbccaa4103a1a4b364d82d64b4c14a0f64"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			vi, err := gitprov.VerifyImage(context.Background(), digest, tt.carrier, policy, tr)
+			vi, err := gitprov.VerifyImage(context.Background(), tt.digest, tt.carrier, policy, tr)
 			if err != nil {
 				t.Fatalf("gitprov.VerifyImage: %v", err)
 			}
 			want := &gitprov.VerifiedIdentity{Subject: identity, Issuer: issuer, CertFingerprint: tt.fingerprint,
-				RekorLogIndex: tt.index, RekorIntegratedTime: tt.time, TrustedRootDigest: rootDig, Digest: digest}
+				RekorLogIndex: tt.index, RekorIntegratedTime: tt.time, TrustedRootDigest: rootDig, Digest: tt.digest}
 			if *vi != *want {
 				t.Fatalf("verified identity\n got %+v\nwant %+v", vi, want)
 			}
-			if _, err := gitprov.VerifyImage(context.Background(), digest, tt.carrier, gitprov.Identity{Subject: "other@greatlion.tech", Issuer: issuer}, tr); err == nil {
+			if _, err := gitprov.VerifyImage(context.Background(), tt.digest, tt.carrier, gitprov.Identity{Subject: "other@greatlion.tech", Issuer: issuer}, tr); err == nil {
 				t.Fatal("another subject verified")
+			}
+			other := "sha256:" + strings.Repeat("ab", 32)
+			if _, err := gitprov.VerifyImage(context.Background(), other, tt.carrier, policy, tr); err == nil {
+				t.Fatal("another digest verified")
 			}
 		})
 	}
-	t.Run("another digest under the captured carriers", func(t *testing.T) {
-		other := "sha256:" + strings.Repeat("ab", 32)
-		for _, c := range []gitprov.ImageCarrier{bundle, envelope} {
-			if _, err := gitprov.VerifyImage(context.Background(), other, c, policy, tr); err == nil {
-				t.Fatal("another digest verified")
-			}
-		}
-	})
 }
 
 func fixtureBytes(t *testing.T, name string) []byte {

@@ -1,0 +1,1 @@
+{"critical":{"identity":{"docker-reference":"ghcr.io/greatliontech/gitprov-cosign-capture"},"image":{"docker-manifest-digest":"sha256:4818f02852957cd2e54cd1f6d6303e96792add0a0694049202551205d439a03d"},"type":"cosign container image signature"},"optional":null}
