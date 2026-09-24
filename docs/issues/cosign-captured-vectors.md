@@ -1,32 +1,24 @@
-# The image verifier's real cosign vectors
+# The image verifier's Rekor v2 vector
 
-Lands: when a cosign-signed image's carriers are captured under
-testdata with their contemporaneous trusted root
+Lands: when a capture signed against a Rekor v2 log lands under
+testdata (scripts/capture-cosign.sh with SIGNING_CONFIG naming the
+log) and its bundle verifies through the whole path
 
-The image verifier is proven on synthetic fixtures — a virtual
-sigstore's entries and timestamps, a fixture Fulcio issuing leaves
-with a certificate timestamp — and the git path's judgement on the
-real gitsign capture. Two shapes those cannot produce wait on real
-bytes: a carrier cosign itself wrote, proving the terms against
-cosign's output rather than its constants; and a Rekor v2 entry — an
+The captured cosign vectors (testdata/NOTICE.md) prove the two
+carriers against bytes cosign itself wrote: a bundle referrer whose
+entry is Rekor v1's `dsse` kind with a signed entry timestamp and an
+inclusion proof, and a legacy envelope whose bundle annotation is a
+v1 `hashedrekord` — the entry kinds cosign 3.1.3's default and legacy
+signs log. One shape remains synthetic: a Rekor v2 entry — an
 inclusion proof under a checkpoint whose origin is the log's host,
-no signed entry timestamp, the time a timestamp's — since the
-synthetic log's checkpoint carries a tree-identifier suffix and so
-takes the client library's v1 branch; the checkpoint judgement here
-covers a v2-shaped checkpoint on its own, a real v2 entry through
-the whole path waits on the capture.
-
-The client library's release pinned beside this record narrows the
-Rekor v2 entry kinds it reads to hashedrekord, where its predecessor
-read a DSSE entry as well, and requires a v1 entry under a DSSE
-bundle to be a dsse or in-toto kind: which kinds cosign's default
-sign logs, under either log version, is what the captures settle,
-and a carrier the library refuses for its entry kind is a finding
-against the contract's bundle term, not against the capture.
-
-The capture, as the gitsign vectors were recorded: a throwaway image
-pushed to a registry, signed with cosign v3 twice — its default
-bundle referrer, and with `--new-bundle-format=false` the legacy
-signature layer — the carriers fetched as bytes with their
-annotations, and the trusted root fetched at signing time; recorded
-with their expected identity, digest, log index and signed time.
+no signed entry timestamp, the time a timestamp's. The default
+signing configuration sigstore's TUF served at the capture
+(`signing_config.v0.2.json`) named only the v1 log
+(`rekor.sigstore.dev`), though the trusted root of the day already
+carried the v2 log's key (`log2025-1.rekor.sigstore.dev`) and TUF's
+other target, `signing_config_rekor_v2.v0.2.json`, names the v2 log
+with v1 as fallback; cosign 3 signs against a v2 log only under a
+signing configuration naming it, which the capture script takes as
+SIGNING_CONFIG — that TUF target is the one to give. The checkpoint
+judgement covers a v2-shaped checkpoint on its own; a real v2 entry
+through the whole path waits on that capture.

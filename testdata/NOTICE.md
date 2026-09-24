@@ -53,6 +53,48 @@ Expected verified identity of the positive fixture (frozen in
 Re-capture (re-sign + re-fetch root, `rekorMode=offline`) if a
 gitsign/sigstore-go bump requires it, and update the expected values.
 
+## Captured cosign vectors
+
+Real carriers cosign v3.1.3+dirty (a distribution build) wrote and
+ghcr.io served, captured
+2026-09-24 by the author with scripts/capture-cosign.sh (interactive
+Google OIDC): a throwaway one-layer OCI image, digest
+`sha256:facb5564762d06aa0d30bba81be04b6d078cd289cb861e864dafd36a85322f28`,
+signed keyless twice — the default bundle referrer under the TUF
+signing configuration, and the legacy simple-signing layer under the
+signature tag against the default Rekor v1 log. The Fulcio leaves
+bind the author's public OIDC identity; the entries are public in
+the transparency log. No secret material, no third-party material.
+`cosign verify` reports both good under the identity below.
+
+- `cosign-fixture-bundle.json`: the bundle referrer's one layer, a
+  version 0.3 bundle: a DSSE envelope over an in-toto v1 statement
+  naming the digest under the cosign sign predicate, the leaf
+  certificate, one Rekor v1 `dsse` entry (log index 2940469140,
+  integrated time 1790262766, a signed entry timestamp and an
+  inclusion proof under a checkpoint whose origin is
+  `rekor.sigstore.dev - 1193050959916656506`) and one RFC 3161
+  timestamp from `timestamp.sigstore.dev`.
+- `cosign-fixture-envelope-manifest.json`: the manifest under the
+  tag `sha256-facb…f28.sig`, its one simple-signing layer carrying
+  the signature, the certificate, an empty chain and the Rekor v1
+  `hashedrekord` bundle (log index 2940477984, integrated time
+  1790262794) as annotations, and no timestamp annotation.
+- `cosign-fixture-envelope-payload.json`: that layer's content, the
+  simple-signing document naming the digest.
+- `cosign-fixture-trusted-root.json`: the trusted root sigstore's
+  TUF served at signing (`sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66`);
+  it names a Rekor v2 log (`log2025-1.rekor.sigstore.dev`) the
+  public signing configuration of the day did not offer, so no v2
+  entry is among these vectors.
+
+Expected verified identity of both (frozen in `image_test.go`):
+`Subject` = `nikolas@greatlion.tech`, `Issuer` =
+`https://accounts.google.com`; the bundle's leaf fingerprint
+`sha256:40c28d9006125604ab5a21be1231899c454653877418fc66a721ff21358bdd5c`,
+the envelope's
+`sha256:9196a33ad6d2f0e231a3a3449c981bb18170e24b5b48ad78e7107a2f265313a3`.
+
 ## SSH-signed fixtures
 
 Real objects git 2.55 wrote and OpenSSH signed (`gpg.format=ssh`),

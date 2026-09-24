@@ -2,7 +2,9 @@ package gitprov_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -373,4 +375,92 @@ func TestHasImageTime(t *testing.T) {
 	if _, err := gitprov.HasImageTime(nil); err == nil {
 		t.Error("a nil carrier answered")
 	}
+}
+
+// The captured vectors: an image cosign v3.1.3 signed keyless twice
+// (testdata/NOTICE.md), its bundle referrer and its legacy
+// simple-signing layer as the registry served them, verified against
+// the trusted root in force at signing — the identity, the digest,
+// each entry's index and its time as the signed time (the bundle's
+// timestamp names the same second, so which source the time is
+// taken from is the synthetic suite's to pin), and the leaf's
+// fingerprint as the sha256 of the carrier's certificate.
+func TestVerifyImageCapturedVectors(t *testing.T) {
+	const (
+		identity = "nikolas@greatlion.tech"
+		issuer   = "https://accounts.google.com"
+		digest   = "sha256:facb5564762d06aa0d30bba81be04b6d078cd289cb861e864dafd36a85322f28"
+		rootDig  = "sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66"
+	)
+	tr, err := gitprov.LoadTrustedRoot("testdata/cosign-fixture-trusted-root.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.Digest() != rootDig {
+		t.Fatalf("trusted root digest %s, want %s", tr.Digest(), rootDig)
+	}
+	bundle := gitprov.SigstoreBundle{JSON: fixtureBytes(t, "testdata/cosign-fixture-bundle.json")}
+	var manifest struct {
+		Layers []struct {
+			MediaType   string            `json:"mediaType"`
+			Annotations map[string]string `json:"annotations"`
+		} `json:"layers"`
+	}
+	if err := json.Unmarshal(fixtureBytes(t, "testdata/cosign-fixture-envelope-manifest.json"), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Layers) != 1 || manifest.Layers[0].MediaType != "application/vnd.dev.cosign.simplesigning.v1+json" {
+		t.Fatalf("envelope manifest layers = %+v", manifest.Layers)
+	}
+	a := manifest.Layers[0].Annotations
+	envelope := gitprov.SimpleSigningEnvelope{
+		Payload:          fixtureBytes(t, "testdata/cosign-fixture-envelope-payload.json"),
+		Signature:        a["dev.cosignproject.cosign/signature"],
+		Certificate:      a["dev.sigstore.cosign/certificate"],
+		Chain:            a["dev.sigstore.cosign/chain"],
+		RekorBundle:      a["dev.sigstore.cosign/bundle"],
+		RFC3161Timestamp: a["dev.sigstore.cosign/rfc3161timestamp"],
+	}
+	policy := gitprov.Identity{Subject: identity, Issuer: issuer}
+	for _, tt := range []struct {
+		name        string
+		carrier     gitprov.ImageCarrier
+		index, time int64
+		fingerprint string
+	}{
+		{"the bundle referrer", bundle, 2940469140, 1790262766, "sha256:40c28d9006125604ab5a21be1231899c454653877418fc66a721ff21358bdd5c"},
+		{"the legacy envelope", envelope, 2940477984, 1790262794, "sha256:9196a33ad6d2f0e231a3a3449c981bb18170e24b5b48ad78e7107a2f265313a3"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			vi, err := gitprov.VerifyImage(context.Background(), digest, tt.carrier, policy, tr)
+			if err != nil {
+				t.Fatalf("gitprov.VerifyImage: %v", err)
+			}
+			want := &gitprov.VerifiedIdentity{Subject: identity, Issuer: issuer, CertFingerprint: tt.fingerprint,
+				RekorLogIndex: tt.index, RekorIntegratedTime: tt.time, TrustedRootDigest: rootDig, Digest: digest}
+			if *vi != *want {
+				t.Fatalf("verified identity\n got %+v\nwant %+v", vi, want)
+			}
+			if _, err := gitprov.VerifyImage(context.Background(), digest, tt.carrier, gitprov.Identity{Subject: "other@greatlion.tech", Issuer: issuer}, tr); err == nil {
+				t.Fatal("another subject verified")
+			}
+		})
+	}
+	t.Run("another digest under the captured carriers", func(t *testing.T) {
+		other := "sha256:" + strings.Repeat("ab", 32)
+		for _, c := range []gitprov.ImageCarrier{bundle, envelope} {
+			if _, err := gitprov.VerifyImage(context.Background(), other, c, policy, tr); err == nil {
+				t.Fatal("another digest verified")
+			}
+		}
+	})
+}
+
+func fixtureBytes(t *testing.T, name string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }

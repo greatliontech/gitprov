@@ -45,7 +45,7 @@ func TestRekoroidGoldenFidelity(t *testing.T) {
 	}
 
 	want := new(models.LogEntryAnon)
-	if err := json.Unmarshal(readFile(t, "testdata/gitsign-oid-tlog.json"), want); err != nil {
+	if err := json.Unmarshal(readFixture(t, "gitsign-oid-tlog.json"), want); err != nil {
 		t.Fatal(err)
 	}
 	// Round-trip exactly as gitsign's own TestOID: golden tlog → ported
@@ -168,13 +168,4 @@ func TestBindHashedRekordBody(t *testing.T) {
 			t.Fatalf("e.Body is not base64: %v", err)
 		}
 	})
-}
-
-func readFile(t *testing.T, p string) []byte {
-	t.Helper()
-	b, err := os.ReadFile(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
 }
