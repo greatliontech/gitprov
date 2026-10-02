@@ -6,4 +6,6 @@ issue file deleted — git holds history.
 
 | Issue | Summary | Lands |
 |---|---|---|
-| [vulncheck-openpgp-advisory](vulncheck-openpgp-advisory.md) | a standing exception with an expiry excuses GO-2026-5932, x/crypto/openpgp reached through the sigstore modules with no fixed version; every other advisory is fixed | when govulncheck reports no GO-2026-5932 against the graph |
+
+*None open — resolved issues live in git history
+(`git log --all -- docs/issues/<slug>.md`).*

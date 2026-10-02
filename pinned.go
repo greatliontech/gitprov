@@ -253,15 +253,58 @@ func isCertification(t packet.SignatureType) bool {
 }
 
 // armorBody is the decoded body of an armored block whose frame
-// passed. The armor checksum, optional under RFC 9580 and not judged
-// by the library, is not judged here: a receiver must not reject on
-// it.
+// passed, its lines read as written. The armor checksum, optional
+// under RFC 9580 and not judged by the library, is not judged here:
+// a receiver must not reject on it.
 func armorBody(text []byte) ([]byte, error) {
+	if err := linesAsWritten(text); err != nil {
+		return nil, err
+	}
 	blk, err := armor.Decode(bytes.NewReader(text))
 	if err != nil {
 		return nil, err
 	}
 	return io.ReadAll(blk.Body)
+}
+
+// linesAsWritten refuses what the armor decoder would pass over
+// unread (REQ-verify-pinned-key, REQ-verify-signature-kind): a
+// body line — one after the blank line that ends the armor headers
+// and before the footer line — with a blank edge, since the decoder
+// trims every body line before reading it, so an indented footer or
+// checksum line would end the block where it stands and pass over
+// whatever follows, and a line padded with blanks would read as one
+// without them; a second armor header line however indented, which
+// the frame counts only at a line's start and the decoder lands on
+// when a header line reads as none (it judges a line's first
+// hundred bytes alone for the colon), passing over the lines
+// between; and an armor header line without its colon, which the
+// decoder reads as the headers' end. The header lines' edges and
+// the blank line are the decoder's to trim, as RFC 4880 has them (a
+// separator of whitespace alone); a CR before the LF is the line
+// end CRLF has, not an edge.
+func linesAsWritten(text []byte) error {
+	inBody := false
+	for i, line := range bytes.Split(text, []byte("\n")) {
+		if bytes.HasPrefix(line, []byte(armorEnd)) {
+			return nil
+		}
+		line = bytes.TrimSuffix(line, []byte("\r"))
+		trimmed := bytes.TrimSpace(line)
+		switch {
+		case i == 0:
+		case bytes.HasPrefix(trimmed, []byte(armorBegin)):
+			return fmt.Errorf("line %d of the armored block is a second armor header line", i+1)
+		case !inBody:
+			inBody = len(trimmed) == 0
+			if !inBody && !bytes.Contains(line, []byte(":")) {
+				return fmt.Errorf("line %d of the armored block is no armor header line", i+1)
+			}
+		case !bytes.Equal(line, trimmed):
+			return fmt.Errorf("line %d of the armored block has a blank edge", i+1)
+		}
+	}
+	return nil
 }
 
 // openPGPFingerprint spells a key's fingerprint as gpg does in full:

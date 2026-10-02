@@ -207,8 +207,19 @@ key signs by what its self-signature's key flags state, one stating
 none signing nothing; a third party's certification — a signature
 of a certification type — in a form the library cannot read is
 passed over in a pinned key's block, and nothing else unreadable is,
-there or in a signature body; the
-armor checksum, optional under RFC 9580, is not judged. A pinned
+there or in a signature body — a block's body lines, those after
+the blank line ending its armor headers and before its footer line,
+read as written, one with a blank edge (which the armor decoder
+would trim, an indented footer or checksum line ending the block
+where it stands and passing over what follows) unreadable, a
+second armor header line however indented (which the decoder would
+land on, seeking the next header line once a line reads as no
+header line, and pass over the lines between) and an armor header
+line without its colon (which the decoder would read as the
+headers' end) unreadable, the
+header lines' edges and the blank line the decoder's to trim as RFC
+4880 has them; the armor checksum, optional under RFC 9580, is not
+judged. A pinned
 OpenPGP key is one armored public key block holding one key and no
 private material, its line ends LF or CRLF.
 

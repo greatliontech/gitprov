@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"encoding/base64"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -103,6 +104,53 @@ func TestVerifyPinnedOpenPGPShapes(t *testing.T) {
 			}
 		})
 	}
+	// A signature block's lines are read as written: one the armor
+	// decoder would trim is unreadable, whatever follows it.
+	for _, where := range []string{"trailing", "footer", "checksum"} {
+		t.Run("a signature line with a blank edge: "+where, func(t *testing.T) {
+			obj := tagOf(t, key, sigstoretest.OpenPGPOptions{})
+			obj.Raw = []byte(sigstoretest.BlankEdge(t, string(obj.Raw), where))
+			if _, err := gitprov.VerifyPinned(obj, pinned); err == nil || !strings.Contains(err.Error(), "blank edge") {
+				t.Fatalf("VerifyPinned = %v, want a blank edge refused", err)
+			}
+		})
+	}
+	t.Run("a junk line among the signature's armor headers before an indented header line", func(t *testing.T) {
+		obj := tagOf(t, key, sigstoretest.OpenPGPOptions{})
+		obj.Raw = []byte(sigstoretest.JunkHeader(t, string(obj.Raw)))
+		if _, err := gitprov.VerifyPinned(obj, pinned); err == nil || !strings.Contains(err.Error(), "no armor header line") {
+			t.Fatalf("VerifyPinned = %v, want the junk line refused", err)
+		}
+	})
+	t.Run("a signature header line with a late colon before an indented header line with one", func(t *testing.T) {
+		obj := tagOf(t, key, sigstoretest.OpenPGPOptions{})
+		obj.Raw = []byte(sigstoretest.LateColonHeader(t, string(obj.Raw)))
+		if _, err := gitprov.VerifyPinned(obj, pinned); err == nil || !strings.Contains(err.Error(), "second armor header line") {
+			t.Fatalf("VerifyPinned = %v, want the landing line refused", err)
+		}
+	})
+	t.Run("a signature body line ending CRLF verifies", func(t *testing.T) {
+		obj := tagOf(t, key, sigstoretest.OpenPGPOptions{})
+		re := regexp.MustCompile(`(?m)^([A-Za-z0-9+/]{16,}=*)\n`)
+		if loc := re.FindIndex(obj.Raw); loc == nil {
+			t.Fatal("no body line in the signature")
+		} else {
+			obj.Raw = append(append(append([]byte(nil), obj.Raw[:loc[1]-1]...), '\r', '\n'), obj.Raw[loc[1]:]...)
+		}
+		if _, err := gitprov.VerifyPinned(obj, pinned); err != nil {
+			t.Fatalf("VerifyPinned = %v, want nil", err)
+		}
+	})
+	t.Run("a signature header line with a trailing blank verifies", func(t *testing.T) {
+		obj := tagOf(t, key, sigstoretest.OpenPGPOptions{Headers: map[string]string{"Comment": "pasted"}})
+		obj.Raw = bytes.Replace(obj.Raw, []byte("Comment: pasted\n"), []byte("Comment: pasted \n"), 1)
+		if !bytes.Contains(obj.Raw, []byte("Comment: pasted \n")) {
+			t.Fatal("no header line to edge")
+		}
+		if _, err := gitprov.VerifyPinned(obj, pinned); err != nil {
+			t.Fatalf("VerifyPinned = %v, want nil", err)
+		}
+	})
 	t.Run("the signature is judged at its own creation time", func(t *testing.T) {
 		// A key made two years ago and valid for one, expired today: a
 		// signature claiming a time within the year verifies today and
@@ -346,6 +394,11 @@ func TestParsePinnedKeyOpenPGP(t *testing.T) {
 		{"a certification by a third party of a version the reader lacks", key.CertifiedByUnknownVersion(t, sub), ""},
 		{"a subkey binding in a form the reader lacks", sub.WithUnreadableBinding(t), "unsupported"},
 		{"a block with a bad checksum", sigstoretest.WithBadChecksum(t, key.Public(t)), ""},
+		{"a body line with a trailing blank", sigstoretest.BlankEdge(t, key.Public(t), "trailing"), "blank edge"},
+		{"an indented footer line before the footer", sigstoretest.BlankEdge(t, key.Public(t), "footer"), "blank edge"},
+		{"an indented checksum line before the footer", sigstoretest.BlankEdge(t, key.Public(t), "checksum"), "blank edge"},
+		{"a junk line among the armor headers before an indented header line", sigstoretest.JunkHeader(t, key.Public(t)), "no armor header line"},
+		{"a header line with a late colon before an indented header line with one", sigstoretest.LateColonHeader(t, key.Public(t)), "second armor header line"},
 		{"a signature block", string(key.SignatureOver(t, []byte("x"), sigstoretest.OpenPGPOptions{})), `labelled "PGP SIGNATURE"`},
 		{"text", "not a key", "does not begin with an armor header line"},
 		{"empty", "", "does not begin with an armor header line"},
